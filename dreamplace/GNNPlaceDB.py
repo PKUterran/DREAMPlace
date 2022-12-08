@@ -206,7 +206,7 @@ class GNNPlaceDB(PlaceDB):
             self.sub_netlist_info[nid]['node_size_x'] = sub_netlist.cell_prop_dict['size'][:,0]
             self.sub_netlist_info[nid]['node_size_y'] = sub_netlist.cell_prop_dict['size'][:,1]
             self.sub_netlist_info[nid]['cell_type'] = sub_netlist.cell_prop_dict['type']
-            # self.sub_netlist_info[nid]['layout_size'] = sub_netlist.layout_size#
+            self.sub_netlist_info[nid]['layout_size'] = sub_netlist.layout_size#
             if nid != -1:
                 """
                 现在sub netlist: layout size
@@ -215,8 +215,8 @@ class GNNPlaceDB(PlaceDB):
                 """
                 span = (sub_netlist.cell_prop_dict['size'][:,0] * sub_netlist.cell_prop_dict['size'][:,1]).sum()
                 self.sub_netlist_info[nid]['width'],\
-                    self.sub_netlist_info[nid]['height'] = span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.5 + 1), \
-                                                            span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.5 + 1)
+                    self.sub_netlist_info[nid]['height'] = span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 10), \
+                                                            span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 10)
                 """
                 sub netlist 的layout是以0,0为左下角
                 """
@@ -227,8 +227,8 @@ class GNNPlaceDB(PlaceDB):
                 这样复杂度可以做到O(nlogn)
                 """
                 self.sub_netlist_info[nid]['num_bins_x'],\
-                    self.sub_netlist_info[nid]['num_bins_y'] = int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell')) + 2),\
-                                        int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell')) + 1)
+                    self.sub_netlist_info[nid]['num_bins_y'] = int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*8 + 10),\
+                                        int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*8 + 10)
                 """
                 这里补成偶数是看了DREAMPlace内部的DCT实现 需要网格数是偶数才行，没有补成偶数
                 DREAMPlace原来直接设置num_bins_x num_bins_y均为1024
@@ -237,6 +237,8 @@ class GNNPlaceDB(PlaceDB):
                     self.sub_netlist_info[nid]['num_bins_x'] += 1
                 if self.sub_netlist_info[nid]['num_bins_y'] % 2 == 1:
                     self.sub_netlist_info[nid]['num_bins_y'] += 1
+                self.sub_netlist_info[nid]['num_bins_x'] = min(self.sub_netlist_info[nid]['num_bins_x'],1024)
+                self.sub_netlist_info[nid]['num_bins_y'] = min(self.sub_netlist_info[nid]['num_bins_y'],1024)
                 # self.netlist.dict_sub_netlist[nid].layout_size = (self.sub_netlist_info[nid]['width'],self.sub_netlist_info[nid]['height'])
             else:
                 self.sub_netlist_info[nid]['width'],self.sub_netlist_info[nid]['height'] = sub_netlist.layout_size
