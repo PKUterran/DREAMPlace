@@ -60,6 +60,10 @@ import argparse
 
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> master
 class GNNPlace():
     def __init__(self,
                 raw_cell_feats: int,
