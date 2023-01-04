@@ -215,8 +215,8 @@ class GNNPlaceDB(PlaceDB):
                 """
                 span = (sub_netlist.cell_prop_dict['size'][:,0] * sub_netlist.cell_prop_dict['size'][:,1]).sum()
                 self.sub_netlist_info[nid]['width'],\
-                    self.sub_netlist_info[nid]['height'] = span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 10), \
-                                                            span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 10)
+                    self.sub_netlist_info[nid]['height'] = span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 5), \
+                                                            span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 5)
                 """
                 sub netlist 的layout是以0,0为左下角
                 """
@@ -227,8 +227,8 @@ class GNNPlaceDB(PlaceDB):
                 这样复杂度可以做到O(nlogn)
                 """
                 self.sub_netlist_info[nid]['num_bins_x'],\
-                    self.sub_netlist_info[nid]['num_bins_y'] = int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*8 + 10),\
-                                        int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*8 + 10)
+                    self.sub_netlist_info[nid]['num_bins_y'] = int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*8 + 4),\
+                                        int(math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*8 + 4)
                 """
                 这里补成偶数是看了DREAMPlace内部的DCT实现 需要网格数是偶数才行，没有补成偶数
                 DREAMPlace原来直接设置num_bins_x num_bins_y均为1024

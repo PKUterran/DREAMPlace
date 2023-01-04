@@ -60,7 +60,6 @@ import argparse
 
 
 
-
 class GNNPlace():
     def __init__(self,
                 raw_cell_feats: int,
@@ -355,8 +354,9 @@ class GNNPlace():
             pos = torch.concat([pos[:num_cells][zero_index],pos[:num_cells][one_index],pos[num_cells:][zero_index],pos[num_cells:][one_index]])
             pos = torch.hstack([pos[:num_cells],pos[:num_cells]])
             pos += torch.tensor([placedb.sub_netlist_info[nid]['width']/2.0,placedb.sub_netlist_info[nid]['height']/2.0],device=device)
-            pos_var = Variable(pos.reshape([-1]),requires_grad=True).to(device)
-            return electric_potential_op(pos_var)
+            # pos_var = Variable(pos.reshape([-1]),requires_grad=True).to(device)
+            pos_var = pos.reshape([-1]).to(device)
+            return electric_potential_op(pos_var) / placedb.sub_netlist_info[nid]['num_nets']
         return build_op_desitypotential
 
     def build_op_sub_netlist_our_hpwl(self,placedb,nid,device):
@@ -397,7 +397,8 @@ class GNNPlace():
         def build_hpwl_op(pos_):
             pos = pos_.clone()
             # pos += torch.tensor([placedb.sub_netlist_info[nid]['width']/2.0,placedb.sub_netlist_info[nid]['height']/2.0],device=device)
-            pos_var = Variable(pos.reshape([-1]),requires_grad=True)
+            # pos_var = Variable(pos.reshape([-1]),requires_grad=True)
+            pos_var = pos.reshape([-1]).to(device)
             hpwl_loss = hpwl_op(pin_pos_op(pos_var)) / placedb.sub_netlist_info[nid]['num_nets']#这里考虑想将hpwl压缩一下
             return hpwl_loss
         return build_hpwl_op
