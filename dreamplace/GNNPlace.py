@@ -1,4 +1,8 @@
+import itertools
+from collections import Counter
+import operator
 import os
+import random
 import sys
 sys.path.append('/home/xuyanyang/RL/DREAMPlace/build')
 import time
@@ -10,6 +14,8 @@ import gzip
 # import copy
 from copy import copy
 import matplotlib.pyplot as plt
+from PIL import Image
+import seaborn as sns
 
 if sys.version_info[0] < 3:
     import cPickle as pickle
@@ -30,7 +36,8 @@ from functools import reduce
 import Params
 from GNNPlaceDB import GNNPlaceDB
 from thirdparty.TexasCyclone.data.graph import Netlist, Layout, expand_netlist, sequentialize_netlist, assemble_layout_with_netlist_info
-from thirdparty.TexasCyclone.data.load_data import netlist_from_numpy_directory, layout_from_netlist_dis_angle
+from thirdparty.TexasCyclone.data.load_data import netlist_from_numpy_directory, layout_from_netlist_dis_deflect
+from thirdparty.TexasCyclone.data.utils import set_seed
 from thirdparty.TexasCyclone.train.functions import AreaLoss, HPWLLoss
 from tqdm import tqdm
 import dgl
@@ -44,6 +51,7 @@ import dreamplace.ops.macro_legalize.macro_legalize as macro_legalize
 import dreamplace.ops.greedy_legalize.greedy_legalize as greedy_legalize
 import dreamplace.ops.abacus_legalize.abacus_legalize as abacus_legalize
 import dreamplace.ops.electric_potential.electric_potential as electric_potential
+import dreamplace.ops.electric_potential.electric_overflow as electric_overflow
 from dreamplace.ops.rudy import rudy
 import dreamplace.ops.draw_place.PlaceDrawer as PlaceDrawer
 import dreamplace.ops.global_swap.global_swap as global_swap
@@ -54,6 +62,7 @@ from matplotlib.collections import PatchCollection
 from tqdm import tqdm
 from torch.autograd import Function, Variable
 import argparse
+import gc
 
 
 
@@ -81,6 +90,15 @@ class GNNPlace():
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=(1 - args.lr_decay))
         self.device = config['DEVICE']
         self.best_metric = 1e10
+        self.gamma = torch.tensor(1e1 * 4.0,device = self.device)#此处参数参考DREAMPlace的初始参数赋值，DREAMPlace的gamma会随着训练变化，这里先不变，
+        #此外DREAMPlace在代码注释意思是gamma越小和真实的hpwl越接近？
+        self.base_gamma = torch.tensor(1e1 * 4.0,device = self.device)
+        self.density_weight = 1
+        self.prev_hpwl = None
+        self.cur_hpwl = None
+        self.epoch = 0
+        self.args = args
+        set_seed(args.seed,use_cuda=args.device != 'cpu')
         self.logs: List[Dict[str, Any]] = []
         self.save_dir = os.path.join(os.path.abspath('.'),'model',f"{args.name}.pkl")
         self.log_dir = os.path.join(os.path.abspath('.'),'log/ours',f"{args.name}.json")
@@ -128,6 +146,15 @@ class GNNPlace():
                 tmp_collection = {}
                 tmp_collection['netlist'] = sub_netlist
                 tmp_collection['metric'] = self.build_metric(placedb,nid)
+                ############ for new train
+                tmp_collection['original_netlist'] = dict_netlist[-1]
+                tmp_collection['placedb'] = placedb
+                tmp_collection['nid'] = nid
+                ############
+                ############ for new train
+                # if nid == -1:
+                #     continue
+                ############
                 data_op_collection.append(tmp_collection)
         return data_op_collection
     
@@ -138,20 +165,30 @@ class GNNPlace():
                     valid_netlist_names:List,
                     test_placedb_list,
                     test_netlist_names:List):
-        data_op_collection = self.collect_netlist_op(train_placedb_list)
         for epoch in range(0, args.epochs + 1):
+            self.epoch = epoch
+            print(f"-------------Epoch:{epoch}--------------")
+            print(f"-------------density weight:{self.density_weight}--------------")
+            print(f"-------------gamma:{self.gamma}--------------")
             self.logs.append({'epoch':epoch})
             t0 = time.time()
             if epoch:
                 for _ in range(args.train_epoch):
-                    self.train_places(args,data_op_collection)
+                    for placedb in train_placedb_list:
+                        data_op_collection = self.collect_netlist_op([placedb])
+                        random.shuffle(data_op_collection)
+                        self.train_places(args,data_op_collection)
+            else:
+                data_op_collection = self.collect_netlist_op(train_placedb_list)
+                self.initialize_density_weight(data_op_collection)
             print(f"train_time:{time.time() - t0}")
             self.logs[-1].update({'train_time': time.time() - t0})
             t1 = time.time()
             
-            # self.evaluate_places(train_placedb_list,train_netlist_names,'train')
+            self.evaluate_places(train_placedb_list,train_netlist_names,'train')
             self.evaluate_places(valid_placedb_list,valid_netlist_names,'valid')
-            # self.evaluate_places(test_placedb_list,test_netlist_names,'test')
+            self.evaluate_places(test_placedb_list,test_netlist_names,'test')
+            
             if self.log_dir is not None:
                 with open(self.log_dir,'w+') as fp:
                     json.dump(self.logs,fp)
@@ -174,11 +211,136 @@ class GNNPlace():
         batch_metric = []
         total_batch_nodes_num = 0
         total_batch_edge_idx = 0
-        batch_cell_feature = []
-        batch_net_feature = []
-        batch_pin_feature = []
+        ############ for new train
+        batch_nid = []
+        batch_cell_pos = []
+        ############
         sub_netlist_feature_idrange = []
         batch_cell_size = []
+        batch_precond = []
+        
+        for j, collection in iter_i_collection:
+            netlist = collection['netlist']
+            ############ for new train
+            if j == -1:
+                continue
+            if collection['nid'] == -1:
+                continue
+            if batch_netlist == []:
+                origin_netlist = collection['original_netlist']
+                batch_metric.append(collection['metric'])#######这里填充一个防止和index混乱
+                batch_nid.append(-1)
+                batch_netlist.append(origin_netlist)
+                father, _ = origin_netlist.graph.edges(etype='points-to')
+                edge_idx_num = father.size(0)
+                sub_netlist_feature_idrange.append([total_batch_edge_idx, total_batch_edge_idx + edge_idx_num])
+                total_batch_edge_idx += edge_idx_num
+                total_batch_nodes_num += origin_netlist.graph.num_nodes('cell')
+                batch_cell_size.append(origin_netlist.graph.nodes['cell'].data['size'])
+            batch_nid.append(collection['nid'])
+            placedb = collection['placedb']
+            ############
+            batch_netlist.append(netlist)
+            batch_metric.append(collection['metric'])
+            father, _ = netlist.graph.edges(etype='points-to')
+            edge_idx_num = father.size(0)
+            sub_netlist_feature_idrange.append([total_batch_edge_idx, total_batch_edge_idx + edge_idx_num])
+            total_batch_edge_idx += edge_idx_num
+            total_batch_nodes_num += netlist.graph.num_nodes('cell')
+            batch_cell_size.append(netlist.graph.nodes['cell'].data['size'])
+            if total_batch_nodes_num > 100000 or j == n_netlist - 1:
+                batch_graph = dgl.batch([sub_netlist.graph for sub_netlist in batch_netlist])
+                batch_cell_size = torch.vstack(batch_cell_size)
+                batch_edge_dis, batch_edge_angle = self.model.forward(
+                    batch_graph, batch_cell_size)
+                # batch_edge_dis,batch_edge_angle = batch_edge_dis.cpu(),batch_edge_angle.cpu()
+                for nid, sub_netlist in enumerate(batch_netlist):
+                    begin_idx, end_idx = sub_netlist_feature_idrange[nid]
+                    edge_dis, edge_angle = batch_edge_dis[begin_idx:end_idx], batch_edge_angle[begin_idx:end_idx]
+                    assert not torch.any(torch.isnan(edge_dis))
+                    assert not torch.any(torch.isinf(edge_dis))
+                    assert not torch.any(torch.isnan(edge_angle))
+                    assert not torch.any(torch.isinf(edge_angle))
+                    layout, dis_loss = layout_from_netlist_dis_deflect(sub_netlist, edge_dis, edge_angle)
+                    assert not torch.isnan(dis_loss), f"{dis_loss}"
+                    assert not torch.isinf(dis_loss), f"{dis_loss}"
+                    assert not torch.any(torch.isnan(layout.cell_pos))
+                    assert not torch.any(torch.isinf(layout.cell_pos))
+                    # metric = batch_metric[nid]
+                    # loss_dict = self.calc_metric(metric,layout)
+                    # loss = sum((
+                    #     # 1e0 * dis_loss,
+                    #     1 * loss_dict['hpwl_loss']*1e-3,
+                    #     float(self.density_weight) * loss_dict['desity_loss']*1e-3,
+                    #     # args.overlap_lambda * loss_dict['overlap_loss'],
+                    #     1e0 * loss_dict['area_loss'],
+                    #     # args.hpwl_lambda * loss_dict['hpwl_loss'],
+                    #     # args.cong_lambda * loss_dict['cong_loss'],
+                    # ))
+                    # assert not torch.isinf(loss_dict['hpwl_loss']), f"{loss_dict['hpwl_loss']}"
+                    # assert not torch.isnan(loss_dict['hpwl_loss']), f"{loss_dict['hpwl_loss']}"
+                    # assert not torch.isinf(loss_dict['desity_loss']), f"{loss_dict['desity_loss']}"
+                    # assert not torch.isnan(loss_dict['desity_loss']), f"{loss_dict['desity_loss']}"
+                    ############ for new train
+                    if batch_nid[nid] != -1:
+                    ############
+                        batch_precond.append((placedb.sub_netlist_info[batch_nid[nid]]['num_pins_in_nodes'] + float(self.density_weight) * sub_netlist.graph.nodes['cell'].data['size'][:,0] * sub_netlist.graph.nodes['cell'].data['size'][:,1]))
+                    
+                    ############ for new train
+                    batch_cell_pos.append(layout.cell_pos)
+                    ############
+                    # print(f"\t\t HPWL Loss:{loss_dict['hpwl_loss']}")
+                    # print(f"\t\t desitypotential Loss:{loss_dict['desity_loss']}")
+                    # print(f'\t\t Discrepancy Loss: {dis_loss}')
+                    # print(f"\t\t Area Loss: {loss_dict['area_loss']}")
+                    # losses.append(loss)
+                self.optimizer.zero_grad()
+                ############ for new train
+                batch_precond = torch.hstack(batch_precond)
+                batch_precond.clamp_(min=1.0)
+                batch_loss = self.build_batch_loss(batch_nid=batch_nid,batch_cell_pos=batch_cell_pos,placedb=placedb,device=self.device)
+                batch_loss.backward()
+                ############ for new train
+                # (sum(losses) / len(losses)).backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=200, norm_type=2)
+                for param in self.model.parameters():
+                    param.grad.div_(torch.max(torch.tensor(batch_precond,device=self.device)))
+                self.optimizer.step()
+                losses.clear()
+                batch_netlist = []
+                sub_netlist_feature_idrange = []
+                total_batch_nodes_num = 0
+                total_batch_edge_idx = 0
+                ############ for new train
+                batch_nid = []
+                batch_precond = []
+                batch_cell_pos = []
+                ############
+                batch_cell_size = []
+                batch_metric = []
+                torch.cuda.empty_cache()
+        print(f"\tTraining time per epoch: {time.time() - t1}")
+
+
+        pass
+
+    def initialize_density_weight(self,data_op_collection):
+        self.model.train()
+        wirelength_grad_norm_list = []
+        density_grad_norm_list = []
+        density_list = []
+        hpwl_losses = []
+        density_losses = []
+        n_netlist = len(data_op_collection)
+        iter_i_collection = enumerate(data_op_collection)
+        batch_netlist = []
+        batch_metric = []
+        total_batch_nodes_num = 0
+        total_batch_edge_idx = 0
+        sub_netlist_feature_idrange = []
+        batch_cell_size = []
+        gc.collect()
+        torch.cuda.empty_cache()
         
         for j, collection in iter_i_collection:
             netlist = collection['netlist']
@@ -189,70 +351,45 @@ class GNNPlace():
             sub_netlist_feature_idrange.append([total_batch_edge_idx, total_batch_edge_idx + edge_idx_num])
             total_batch_edge_idx += edge_idx_num
             total_batch_nodes_num += netlist.graph.num_nodes('cell')
-            batch_cell_feature.append(netlist.cell_prop_dict['feat'])
-            batch_net_feature.append(netlist.net_prop_dict['feat'])
-            batch_pin_feature.append(netlist.pin_prop_dict['feat'])
-            batch_cell_size.append(netlist.cell_prop_dict['size'])
+            batch_cell_size.append(netlist.graph.nodes['cell'].data['size'])
             if total_batch_nodes_num > 50000 or j == n_netlist - 1:
-                batch_cell_feature = torch.vstack(batch_cell_feature)
-                batch_net_feature = torch.vstack(batch_net_feature)
-                batch_pin_feature = torch.vstack(batch_pin_feature)
                 batch_graph = dgl.batch([sub_netlist.graph for sub_netlist in batch_netlist])
                 batch_cell_size = torch.vstack(batch_cell_size)
                 batch_edge_dis, batch_edge_angle = self.model.forward(
-                    batch_graph, (batch_cell_feature, batch_net_feature, batch_pin_feature),batch_cell_size)
+                    batch_graph, batch_cell_size)
                 # batch_edge_dis,batch_edge_angle = batch_edge_dis.cpu(),batch_edge_angle.cpu()
                 for nid, sub_netlist in enumerate(batch_netlist):
                     begin_idx, end_idx = sub_netlist_feature_idrange[nid]
                     edge_dis, edge_angle = batch_edge_dis[begin_idx:end_idx], batch_edge_angle[begin_idx:end_idx]
-                    assert not torch.any(torch.isnan(edge_dis))
-                    assert not torch.any(torch.isinf(edge_dis))
-                    assert not torch.any(torch.isnan(edge_angle))
-                    assert not torch.any(torch.isinf(edge_angle))
-                    layout, dis_loss = layout_from_netlist_dis_angle(sub_netlist, edge_dis, edge_angle)
-                    assert not torch.isnan(dis_loss), f"{dis_loss}"
-                    assert not torch.isinf(dis_loss), f"{dis_loss}"
-                    assert not torch.any(torch.isnan(layout.cell_pos))
-                    assert not torch.any(torch.isinf(layout.cell_pos))
+                    # edge_dis = edge_dis * ((sub_netlist.layout_size[0]**2+sub_netlist.layout_size[1]**2))**0.5
+                    layout, dis_loss = layout_from_netlist_dis_deflect(sub_netlist, edge_dis, edge_angle)
                     metric = batch_metric[nid]
                     loss_dict = self.calc_metric(metric,layout)
-                    loss = sum((
-                        # args.dis_lambda * dis_loss,
-                        1e0 * loss_dict['hpwl_loss'],
-                        1e2 * loss_dict['desity_loss'],
-                        # args.overlap_lambda * loss_dict['overlap_loss'],
-                        # 1e-1 * loss_dict['area_loss'],
-                        # args.hpwl_lambda * loss_dict['hpwl_loss'],
-                        # args.cong_lambda * loss_dict['cong_loss'],
-                    ))
-                    assert not torch.isinf(loss_dict['hpwl_loss']), f"{loss_dict['hpwl_loss']}"
-                    assert not torch.isnan(loss_dict['hpwl_loss']), f"{loss_dict['hpwl_loss']}"
-                    assert not torch.isinf(loss_dict['desity_loss']), f"{loss_dict['desity_loss']}"
-                    assert not torch.isnan(loss_dict['desity_loss']), f"{loss_dict['desity_loss']}"
-                    # print(f"\t\t HPWL Loss:{loss_dict['hpwl_loss']}")
-                    # print(f"\t\t desitypotential Loss:{loss_dict['desity_loss']}")
-                    # print(f'\t\t Discrepancy Loss: {dis_loss}')
-                    # print(f"\t\t Discrepancy Loss: {loss_dict['area_loss']}")
-                    losses.append(loss)
-                # self.optimizer.zero_grad()
-                (sum(losses) / len(losses)).backward()
-                # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=20, norm_type=2)
-                self.optimizer.step()
-                losses.clear()
+                    hpwl_losses.append(loss_dict['hpwl_loss'])
+                    density_losses.append(loss_dict['desity_loss'])
+                    density_list.append(loss_dict['desity_loss'])
+                    
+                self.optimizer.zero_grad()
+                (sum(hpwl_losses) / len(hpwl_losses)).backward(retain_graph=True)
+                for param in self.model.parameters():
+                    wirelength_grad_norm_list.append(torch.norm(param.grad.view(-1),p=1))
+                hpwl_losses.clear()
+                self.optimizer.zero_grad()
+                (sum(density_losses) / len(density_losses)).backward()
+                for param in self.model.parameters():
+                    density_grad_norm_list.append(torch.norm(param.grad.view(-1),p=1))
+                density_losses.clear()
                 batch_netlist = []
                 sub_netlist_feature_idrange = []
                 total_batch_nodes_num = 0
                 total_batch_edge_idx = 0
-                batch_cell_feature = []
-                batch_net_feature = []
-                batch_pin_feature = []
                 batch_cell_size = []
                 batch_metric = []
                 torch.cuda.empty_cache()
-        print(f"\tTraining time per epoch: {time.time() - t1}")
-
-
-        pass
+        density = torch.mean(torch.tensor(density_list))
+        wirelength_grad_norm = torch.mean(torch.tensor(wirelength_grad_norm_list))
+        density_grad_norm = torch.mean(torch.tensor(density_grad_norm_list))
+        self.density_weight = 8e-6 * wirelength_grad_norm / density_grad_norm
     
     def build_op_sub_netlist_area(self,placedb,nid,device):
         area_op = AreaLoss()
@@ -262,6 +399,207 @@ class GNNPlace():
         return build_op_area
         pass
 
+############ for new train
+    def build_batch_loss(self,batch_nid,batch_cell_pos,placedb,device):
+        ########## get true cell_pos
+        ref_pos = batch_cell_pos[0]
+        cell_pos = []
+        ########## get true cell_pos
+        ########## get cell index in original netlist
+        cell_type = placedb.netlist.original_netlist.graph.nodes['cell'].data['type'].squeeze().to(device)
+        terminal_index = torch.argwhere(cell_type > 0).squeeze().to(device)
+        # batch_cell = list(itertools.chain.from_iterable(placedb.cell_clusters[batch_nid])) + list(terminal_index)
+        batch_cell = torch.zeros(size=[0], dtype=torch.float32,device=device)
+        ########## get cell index in original netlist
+        for nid,_cell_pos in zip(batch_nid,batch_cell_pos):
+            if nid == -1:
+                continue
+            cell_pos.append(_cell_pos + ref_pos[nid] - torch.tensor(placedb.netlist.dict_sub_netlist[nid].layout_size, dtype=torch.float32, device=device))########## get true cell_pos
+            batch_cell = torch.hstack([batch_cell,placedb.netlist.dict_sub_netlist[nid].graph.nodes['cell'].data[dgl.NID].to(device)])
+        _graph = placedb.netlist.original_netlist.graph
+        _graph = _graph.to(device)
+        _cells,_nets = _graph.edges(etype='pins')
+        partion_cells = torch.tensor(torch.hstack([batch_cell,terminal_index]).long(),dtype=torch.long,device=device)
+        # net_mask = torch.zeros(_graph.num_nodes(ntype='net')).bool()
+        # batch_cell_mask = torch.zeros(_graph.num_nodes(ntype='cell')).bool()
+        # batch_cell_mask[batch_cell] = True
+        # cnt = 0
+        # for cell,net in zip(_cells,_nets):
+        #     net_mask[net]|=batch_cell_mask[cell]
+        #     if batch_cell_mask[cell]:
+        #         cnt += 1
+        # partion_nets = torch.arange(_graph.num_nodes(ntype='net'),device=device)[net_mask]
+        _sub_graph = dgl.node_subgraph(_graph,nodes={'cell':partion_cells,'net':_graph.nodes('net')},output_device=device)
+        _,__nets = _sub_graph.edges(etype='pins')
+        __nets = torch.unique(__nets)
+        partion_nets = _sub_graph.nodes['net'].data[dgl.NID][__nets]
+        _sub_graph = dgl.node_subgraph(_graph,nodes={'cell':partion_cells,'net':partion_nets},output_device=device)
+        __cells,_ = _sub_graph.edges(etype='pins')
+        __cells = torch.unique(__cells)
+        partion_cells = _sub_graph.nodes['cell'].data[dgl.NID][__cells]
+        _sub_graph = dgl.node_subgraph(_graph,nodes={'cell':partion_cells,'net':partion_nets},output_device=device)
+        terminal_index = torch.tensor(list(set(partion_cells.cpu().numpy()) - set(batch_cell.cpu().numpy()))).to(device)
+        batch_cell = torch.hstack([batch_cell,terminal_index]).long()
+        cell_pos.append(placedb.netlist.original_netlist.graph.nodes['cell'].data['pos'][terminal_index].to(device))
+        cell_pos = torch.vstack(cell_pos)
+        _graph = _graph.cpu()
+
+        cells,nets = _sub_graph.edges(etype='pins')
+        _pin_pos = _sub_graph.edges['pinned'].data['pos']
+        num_physical_nodes = _sub_graph.num_nodes(ntype='cell')
+        num_nets = _sub_graph.num_nodes(ntype='net')
+        pin_offset_x = _pin_pos[:,0]
+        pin_offset_y = _pin_pos[:,1]
+        node_size_x = _sub_graph.nodes['cell'].data['size'][:,0]
+        node_size_y = _sub_graph.nodes['cell'].data['size'][:,1]
+        cell_type = _sub_graph.nodes['cell'].data['type']
+        
+    
+        num_bins_x = placedb.params.num_bins_x
+        num_bins_y = placedb.params.num_bins_y
+        xl,yl,xh,yh = placedb.xl,placedb.yl,placedb.xh,placedb.yh
+        width = xh - xl
+        height = yh - yl
+        bin_size_x = width / num_bins_x
+        bin_size_y = height / num_bins_y
+
+
+        pin2node_map = torch.tensor(cells,dtype=torch.long)
+
+        pin2net_map = nets
+
+        _flat_net2pin_start_map,_flat_net2pin_map = torch.sort(nets)
+        counter = Counter(list(_flat_net2pin_start_map.cpu().numpy()))
+        _flat_net2pin_start_map = np.array(list(counter.values()))
+        _net_degrees = _flat_net2pin_start_map
+        _flat_net2pin_start_map = np.cumsum(_flat_net2pin_start_map)
+        _flat_net2pin_start_map = torch.hstack([torch.tensor(0),torch.tensor(_flat_net2pin_start_map)])
+
+        _flat_node2pin_start_map,_flat_node2pin_map = torch.sort(cells)
+        counter = Counter(list(_flat_node2pin_start_map.cpu().numpy()))
+        _flat_node2pin_start_map = np.array(list(counter.values()))
+        _flat_node2pin_start_map = np.cumsum(_flat_node2pin_start_map)
+        _flat_node2pin_start_map = torch.hstack([torch.tensor(0),torch.tensor(_flat_node2pin_start_map)])
+        flat_net2pin_map = _flat_net2pin_map.cpu().int()
+        flat_net2pin_start_map = _flat_net2pin_start_map.cpu().int()
+        flat_node2pin_map = _flat_node2pin_map.cpu().int()
+        flat_node2pin_start_map = _flat_node2pin_start_map.cpu().int()
+        # assert torch.equal(_flat_net2pin_map.cpu().int(),flat_net2pin_map)
+        # assert torch.equal(_flat_net2pin_start_map.cpu().int(),flat_net2pin_start_map)
+        # assert torch.equal(_flat_node2pin_map.cpu().int(),flat_node2pin_map)
+        # assert torch.equal(_flat_node2pin_start_map.cpu().int(),flat_node2pin_start_map)
+
+        net_weights = torch.ones(_sub_graph.num_nodes(ntype='net'))
+
+        # net_degrees = np.array([
+        #     len(net2pin) for net2pin in net2pin_map
+        # ])
+        # assert (net_degrees == _net_degrees).all()
+        net_degrees = _net_degrees
+        net_mask = np.logical_and(
+            2 <= net_degrees,
+            net_degrees < placedb.params.ignore_net_degree
+        )
+        net_mask_all = torch.from_numpy(
+            np.ones(_sub_graph.num_nodes(ntype='net'))
+        )
+
+        # pin_mask_ignore_fixed_macros = torch.tensor(pin_mask_ignore_fixed_macros,dtype=torch.bool)
+        _pin_mask_ignore_fixed_macros = torch.where(_sub_graph.nodes['cell'].data['type'][cells,0] > 0,1,0).bool()
+        pin_mask_ignore_fixed_macros = _pin_mask_ignore_fixed_macros
+        # assert torch.equal(_pin_mask_ignore_fixed_macros,pin_mask_ignore_fixed_macros)
+
+        ########## construct wirelength loss
+        pin_pos_op = pin_pos.PinPos(
+            pin_offset_x=torch.tensor(pin_offset_x).to(device),
+            pin_offset_y=torch.tensor(pin_offset_y).to(device),
+            pin2node_map=torch.tensor(pin2node_map,dtype=torch.long).to(device),
+            flat_node2pin_map=torch.tensor(flat_node2pin_map,dtype=torch.int32).to(device),
+            flat_node2pin_start_map=torch.tensor(flat_node2pin_start_map,dtype=torch.int32).to(device),
+            num_physical_nodes=num_physical_nodes,
+            algorithm="node-by-node"
+        )
+        hpwl_op = weighted_average_wirelength.WeightedAverageWirelength(
+            flat_netpin=Variable(torch.tensor(flat_net2pin_map,dtype=torch.int32)).to(device),
+            netpin_start=Variable(torch.tensor(flat_net2pin_start_map,dtype=torch.int32)).to(device),
+            pin2net_map=torch.tensor(pin2net_map,dtype=torch.int32).to(device),
+            net_weights=torch.tensor(net_weights,dtype=torch.float32).to(device),
+            net_mask=torch.tensor(net_mask_all,dtype=torch.uint8).to(device),
+            pin_mask=torch.tensor(pin_mask_ignore_fixed_macros,dtype=torch.bool).to(device),
+            gamma=(self.gamma * (bin_size_x + bin_size_y)).to(device),
+            algorithm='merged'
+        )
+        ########## construct wirelength loss
+
+        ########## construct density loss
+        num_moveable_cell = sum(cell_type == 0)
+        moveable_size_x = node_size_x[:num_moveable_cell]
+        _, sorted_node_map = torch.sort(moveable_size_x)
+        sorted_node_map = sorted_node_map.to(torch.int32).to(device)
+        node_areas = node_size_x * node_size_y
+        mean_area = node_areas[:num_moveable_cell].mean().mul_(10)
+        row_height = node_size_y[:num_moveable_cell].min().mul_(2)
+        moveable_macro_mask = ((node_areas[:num_moveable_cell] > mean_area) & \
+            (node_size_y[:num_moveable_cell] > row_height)).to(device)
+        assert torch.all(cell_type[:num_moveable_cell] < 1)
+        """
+        注：这个moveable_macro_mask需要有fence_regions
+        现在fence_regions还是None，从py调用看来DREAMPlace的superblue2是不需要
+        """
+        
+        def bin_center_x_padded(xh_,xl_,padding,num_bins_x):
+            bin_size_x = (xh_ - xl_) / num_bins_x
+            xl = xl_ - padding * bin_size_x
+            xh = xh_ + padding * bin_size_x
+            bin_center_x = torch.from_numpy(
+                placedb.bin_centers(xl, xh, bin_size_x)).to(device)
+            return bin_center_x
+        def bin_center_y_padded(yh_,yl_,padding,num_bins_y):
+            bin_size_y = (yh_ - yl_) / num_bins_y
+            yl = yl_ - padding * bin_size_y
+            yh = yh_ + padding * bin_size_y
+            bin_center_y = torch.from_numpy(
+                placedb.bin_centers(yl, yh, bin_size_y)).to(device)
+            return bin_center_y
+        
+        num_cells = num_physical_nodes
+        target_density = torch.empty(1,dtype=torch.float32,device=device)
+        target_density.data.fill_(placedb.params.target_density)
+        electric_potential_op = electric_potential.ElectricPotential(
+            node_size_x=node_size_x.to(device),
+            node_size_y=node_size_y.to(device),
+            bin_center_x=bin_center_x_padded(xl,xh, 0, num_bins_x),#此处函数实现直接抄DREAMPlace
+            bin_center_y=bin_center_y_padded(yl,yh, 0, num_bins_y),
+            target_density=torch.tensor(target_density,requires_grad=False).to(device),
+            xl=float(xl),
+            yl=float(yl),
+            xh=float(xh),
+            yh=float(yh),
+            bin_size_x=float(bin_size_x),
+            bin_size_y=float(bin_size_y),
+            num_movable_nodes=num_moveable_cell,
+            num_terminals=num_cells - num_moveable_cell,
+            num_filler_nodes=0,
+            padding=0,
+            deterministic_flag=False,
+            sorted_node_map=sorted_node_map,
+            movable_macro_mask=moveable_macro_mask,
+            fast_mode=False,
+            region_id=None,
+            fence_regions=None,
+            node2fence_region_map=None,
+            placedb=None)
+        ########## construct density loss
+        ########## calculate wirelength&density loss
+        pos = cell_pos
+        pos = pos.reshape([-1]).to(device)
+        pos[:num_cells] -= node_size_x.to(device) / 2
+        pos[num_cells:] -= node_size_y.to(device) / 2
+        pos_var = pos.reshape([-1]).to(device)
+        hpwl_loss = hpwl_op(pin_pos_op(pos_var))
+        density_loss = electric_potential_op(pos_var)
+        return hpwl_loss + self.density_weight * density_loss
+############ for new train
 
     def build_op_sub_netlist_desitypotential(self,placedb,nid,device):
         # device = pos.device
@@ -349,14 +687,23 @@ class GNNPlace():
             注：此处将pos变换从以0,0为中心点变为以(width / 2, height / 2)为中心点
             相当于左下角点变为(0,0)
             """
-            pos = pos_.clone()
+            pos = pos_#.clone()
             pos = pos.reshape([-1])
             pos = torch.concat([pos[:num_cells][zero_index],pos[:num_cells][one_index],pos[num_cells:][zero_index],pos[num_cells:][one_index]])
             pos = torch.hstack([pos[:num_cells],pos[:num_cells]])
-            pos += torch.tensor([placedb.sub_netlist_info[nid]['width']/2.0,placedb.sub_netlist_info[nid]['height']/2.0],device=device)
+            _pos = pos#.clone()
+            _pos = _pos.reshape([-1])
+            _pos[:num_cells] -= placedb.sub_netlist_info[nid]['node_size_x'].to(device) / 2
+            _pos[num_cells:] -= placedb.sub_netlist_info[nid]['node_size_y'].to(device) / 2
+            # _pos[:num_cells] = torch.maximum(_pos[:num_cells],torch.zeros_like(_pos[:num_cells]))
+            # _pos[:num_cells] = torch.minimum(torch.tensor(placedb.sub_netlist_info[nid]['xh'],device=device) - torch.tensor(placedb.sub_netlist_info[nid]['node_size_x'],device=device),_pos[:num_cells])
+
+            # _pos[num_cells:] = torch.maximum(_pos[num_cells:],torch.zeros_like(_pos[num_cells:]))
+            # _pos[num_cells:] = torch.minimum(torch.tensor(placedb.sub_netlist_info[nid]['yh'],device=device) - torch.tensor(placedb.sub_netlist_info[nid]['node_size_y'],device=device),_pos[num_cells:])
+            
             # pos_var = Variable(pos.reshape([-1]),requires_grad=True).to(device)
-            pos_var = pos.reshape([-1]).to(device)
-            return electric_potential_op(pos_var) / placedb.sub_netlist_info[nid]['num_nets']
+            pos_var = _pos.reshape([-1]).to(device)
+            return electric_potential_op(pos_var)
         return build_op_desitypotential
 
     def build_op_sub_netlist_our_hpwl(self,placedb,nid,device):
@@ -372,8 +719,6 @@ class GNNPlace():
         # device = pos.device
         bin_size_x = (placedb.sub_netlist_info[nid]['xh'] - placedb.sub_netlist_info[nid]['xl']) / placedb.sub_netlist_info[nid]['num_bins_x']
         bin_size_y = (placedb.sub_netlist_info[nid]['yh'] - placedb.sub_netlist_info[nid]['yl']) / placedb.sub_netlist_info[nid]['num_bins_y']
-        gamma = torch.tensor(1e1 * 4.0 * (bin_size_x + bin_size_y))#此处参数参考DREAMPlace的初始参数赋值，DREAMPlace的gamma会随着训练变化，这里先不变，
-        #此外DREAMPlace在代码注释意思是gamma越小和真实的hpwl越接近？
         pin_pos_op = pin_pos.PinPos(
             pin_offset_x=torch.tensor(placedb.sub_netlist_info[nid]['pin_offset_x']).to(device),
             pin_offset_y=torch.tensor(placedb.sub_netlist_info[nid]['pin_offset_y']).to(device),
@@ -390,7 +735,7 @@ class GNNPlace():
             net_weights=torch.tensor(placedb.sub_netlist_info[nid]['net_weights'],dtype=torch.float32).to(device),
             net_mask=torch.tensor(placedb.sub_netlist_info[nid]['net_mask_all'],dtype=torch.uint8).to(device),
             pin_mask=torch.tensor(placedb.sub_netlist_info[nid]['pin_mask_ignore_fixed_macros'],dtype=torch.bool).to(device),
-            gamma=gamma.to(device),
+            gamma=(self.gamma * (bin_size_x + bin_size_y)).to(device),
             algorithm='merged'
         )
         
@@ -398,8 +743,12 @@ class GNNPlace():
             pos = pos_.clone()
             # pos += torch.tensor([placedb.sub_netlist_info[nid]['width']/2.0,placedb.sub_netlist_info[nid]['height']/2.0],device=device)
             # pos_var = Variable(pos.reshape([-1]),requires_grad=True)
+            pos = pos.reshape([-1]).to(device)
+            num_cells = placedb.sub_netlist_info[nid]['num_physical_nodes']
+            pos[:num_cells] -= placedb.sub_netlist_info[nid]['node_size_x'].to(device) / 2
+            pos[num_cells:] -= placedb.sub_netlist_info[nid]['node_size_y'].to(device) / 2
             pos_var = pos.reshape([-1]).to(device)
-            hpwl_loss = hpwl_op(pin_pos_op(pos_var)) / placedb.sub_netlist_info[nid]['num_nets']#这里考虑想将hpwl压缩一下
+            hpwl_loss = hpwl_op(pin_pos_op(pos_var))#这里考虑想将hpwl压缩一下
             return hpwl_loss
         return build_hpwl_op
     
@@ -407,18 +756,47 @@ class GNNPlace():
         t0 = time.time()
         ds = []
         metric = 0
+        total_overflow = 0
+        total_hpwl = 0
         for placedb,netlist_name in zip(placedb_list,netlist_names):
+            netlist_name = netlist_name.split('/')[-1]
             metric_dict = self.evaluate_place(placedb,placedb.netlist,netlist_name,use_tqdm=True)
             metric += metric_dict['hpwl']
             d = {
                 f'{netlist_name}_hpwl':float(metric_dict['hpwl']),
                 f'{netlist_name}_rudy':float(metric_dict['rudy']),
+                f'{netlist_name}_overflow':float(metric_dict['overflow']),
+                f'{netlist_name}_max_density':float(metric_dict['max_density']),
             }
+            total_overflow += metric_dict['overflow']
+            total_hpwl += metric_dict['hpwl']
             self.logs[-1].update(d)
         metric /= len(netlist_names)
+        if name == 'train':
+            overflow_avg = torch.tensor(total_overflow / len(placedb_list))
+            hpwl_avg = torch.tensor(total_hpwl / len(placedb_list))
+            UPPER_PCOF = 1.05
+            LOWER_PCOF = 0.95
+            ref_hpwl = 350000
+            coef = torch.pow(10, (overflow_avg - 0.1) * 20 / 9 - 1)
+            self.gamma.data.fill_((self.base_gamma * coef).item())
+            if self.cur_hpwl is None:
+                self.cur_hpwl = hpwl_avg
+            else:
+                self.prev_hpwl = self.cur_hpwl
+                self.cur_hpwl = hpwl_avg
+                delta_hpwl = self.cur_hpwl - self.prev_hpwl
+                if delta_hpwl < 0:
+                    mu = UPPER_PCOF * np.maximum(
+                        np.power(0.9999, float(self.epoch)), 0.98)
+                else:
+                    mu = UPPER_PCOF * torch.pow(
+                        UPPER_PCOF, -delta_hpwl / ref_hpwl).clamp(
+                            min=LOWER_PCOF, max=UPPER_PCOF)
+                self.density_weight *= mu
         print(f"inference {name} time {time.time() - t0}")
         if name == 'valid':
-            if metric < self.best_metric:
+            if metric < self.best_metric or True:
                 self.best_metric = metric
                 print(f"Saving model to {self.save_dir}")
                 torch.save(self.model.state_dict(),self.save_dir)
@@ -426,11 +804,11 @@ class GNNPlace():
 
 
 
-    def evaluate_place(self,placedb,netlist: Netlist, netlist_name: str, use_tqdm=True, verbose=True):
+    def evaluate_place(self,placedb,netlist: Netlist, netlist_name: str, finetuning=0, detail_placement=False, write_pl=False, use_tqdm=True):
         """
         本部分和我们代码的evaluate基本一样
         """
-        self.model.train()
+        self.model.eval()
         evaluate_cell_pos_corner_dict = {}
         print("-------")
         print(f'\tFor {netlist_name}:')
@@ -443,15 +821,20 @@ class GNNPlace():
         batch_netlist_id = []
         total_batch_nodes_num = 0
         total_batch_edge_idx = 0
-        batch_cell_feature = []
-        batch_net_feature = []
-        batch_pin_feature = []
         sub_netlist_feature_idrange = []
         batch_cell_size = []
         total_dis = []
         total_angle = []
         cnt = 0
+        if finetuning:
+            data_op_collection = self.collect_netlist_op([placedb])
+            if self.args.model:
+                self.load_dict(f"./model/{self.args.model}.pkl",self.device)
         t0 = time.time()
+        if finetuning:
+            # random.shuffle(data_op_collection)
+            for _ in range(finetuning):
+                self.train_places(self.args,data_op_collection)
         for nid, sub_netlist in iter_i_sub_netlist:
             dni[nid] = {}
             batch_netlist_id.append(nid)
@@ -460,14 +843,8 @@ class GNNPlace():
             sub_netlist_feature_idrange.append([total_batch_edge_idx, total_batch_edge_idx + edge_idx_num])
             total_batch_edge_idx += edge_idx_num
             total_batch_nodes_num += sub_netlist.graph.num_nodes('cell')
-            batch_cell_feature.append(sub_netlist.cell_prop_dict['feat'])
-            batch_net_feature.append(sub_netlist.net_prop_dict['feat'])
-            batch_pin_feature.append(sub_netlist.pin_prop_dict['feat'])
-            batch_cell_size.append(sub_netlist.cell_prop_dict['size'])
+            batch_cell_size.append(sub_netlist.graph.nodes['cell'].data['size'])
             if total_batch_nodes_num > 100000 or cnt == total_len - 1:
-                batch_cell_feature = torch.vstack(batch_cell_feature)
-                batch_net_feature = torch.vstack(batch_net_feature)
-                batch_pin_feature = torch.vstack(batch_pin_feature)
                 batch_cell_size = torch.vstack(batch_cell_size)
                 batch_graph = []
                 for nid_ in batch_netlist_id:
@@ -475,19 +852,31 @@ class GNNPlace():
                     batch_graph.append(netlist.graph)
                 batch_graph = dgl.batch(batch_graph)
                 batch_edge_dis, batch_edge_angle = self.model.forward(
-                    batch_graph, (batch_cell_feature, batch_net_feature, batch_pin_feature),batch_cell_size)
+                    batch_graph, batch_cell_size)
                 # batch_edge_dis,batch_edge_angle = batch_edge_dis.cpu(),batch_edge_angle.cpu()
                 for j, nid_ in enumerate(batch_netlist_id):
                     sub_netlist_ = dict_netlist[nid_]
                     begin_idx, end_idx = sub_netlist_feature_idrange[j]
                     edge_dis, edge_angle = \
                         batch_edge_dis[begin_idx:end_idx], batch_edge_angle[begin_idx:end_idx]
-                    layout, dis_loss = layout_from_netlist_dis_angle(sub_netlist_, edge_dis, edge_angle)
+                    # edge_dis = edge_dis * ((placedb.sub_netlist_info[nid]['width']**2+placedb.sub_netlist_info[nid]['height']**2))**0.5
+                    layout, dis_loss = layout_from_netlist_dis_deflect(sub_netlist_, edge_dis, edge_angle)
                     
                     # hpwl_loss = self.build_op_sub_netlist_hpwl(placedb,nid_,self.device)(layout.cell_pos)
                     # density_loss = self.build_op_sub_netlist_desitypotential(placedb,nid_,self.device)(layout.cell_pos)
                     # hpwl_loss.backward()
                     # density_loss.backward()
+                    # x,y = edge_dis * torch.cos(edge_angle),edge_dis * torch.sin(edge_angle)
+                    # print(nid_)
+                    # print("edge_dis:",edge_dis)
+                    # print("edge_angle",edge_angle)
+                    # print("---------------")
+                    # plt.scatter(x.detach().cpu().numpy(),y.detach().cpu().numpy(),s=1)
+                    # plt.savefig(f'./dis_angle/dis_angle{nid_}.png')
+                    # plt.clf()
+                    # plt.scatter(layout.cell_pos[:,0].detach().cpu().numpy(),layout.cell_pos[:,1].detach().cpu().numpy(),s=1)
+                    # plt.savefig("./test_mgc_fft_1_cell_pos.png")
+                    # plt.clf()
 
                     assert not torch.isnan(dis_loss)
                     assert not torch.isinf(dis_loss)
@@ -496,25 +885,33 @@ class GNNPlace():
                 sub_netlist_feature_idrange = []
                 total_batch_nodes_num = 0
                 total_batch_edge_idx = 0
-                batch_cell_feature = []
-                batch_net_feature = []
-                batch_pin_feature = []
                 batch_cell_size = []
             cnt += 1
             torch.cuda.empty_cache()
         layout = assemble_layout_with_netlist_info(dni, dict_netlist, device=self.device)
         evaluate_cell_pos_corner_dict[netlist_name] = \
-            layout.cell_pos.cpu() - layout.cell_size / 2
-        evaluate_cell_pos_corner_dict[netlist_name] = torch.maximum(torch.zeros_like(layout.cell_pos.cpu()),evaluate_cell_pos_corner_dict[netlist_name])
-        evaluate_cell_pos_corner_dict[netlist_name] = torch.minimum(torch.tensor([placedb.xh,placedb.yh]).view([1,2]) - layout.cell_size,evaluate_cell_pos_corner_dict[netlist_name])
+            layout.cell_pos.to(self.device) - layout.cell_size.to(self.device) / 2
+        evaluate_cell_pos_corner_dict[netlist_name] = torch.maximum(torch.zeros_like(layout.cell_pos.to(self.device)),evaluate_cell_pos_corner_dict[netlist_name])
+        evaluate_cell_pos_corner_dict[netlist_name] = torch.minimum(torch.tensor([placedb.xh,placedb.yh]).view([1,2]).to(self.device) - layout.cell_size.to(self.device),evaluate_cell_pos_corner_dict[netlist_name])
         """
         防止cell出界
         LG阶段没法处理出界
         """
         torch.cuda.empty_cache()
         # print(f"layout process time {time.time()-t0}")
-        self.logs[-1].update({f'{netlist_name} eval_time': time.time() - t0})
-        evaluate_result_dict = self.evaluate_from_numpy(evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy(),placedb)#evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy()
+        eval_time = time.time() - t0
+        print(f'{netlist_name} eval_time : { eval_time }')
+        self.logs[-1].update({f'{netlist_name} eval_time': eval_time})
+        if not os.path.exists(f"./result/{self.args.name}"):
+            os.mkdir(f"./result/{self.args.name}")
+        if not os.path.exists(f"./result/{self.args.name}/{netlist_name}"):
+            os.mkdir(f"./result/{self.args.name}/{netlist_name}")
+        np.save(f'./result/{self.args.name}/{netlist_name}/{netlist_name}.npy',evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy())
+        evaluate_result_dict = self.evaluate_from_numpy(evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy(),netlist_name,placedb,detail_placement,write_pl)#evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy()
+        # evaluate_result_dict['hpwl'] /= placedb.params.scale_factor
+        evaluate_result_dict['overflow'],evaluate_result_dict['max_density'] = self.evaluate_overflow(placedb,evaluate_cell_pos_corner_dict[netlist_name].detach().cpu())
+        evaluate_result_dict['overflow'] = float(evaluate_result_dict['overflow'].cpu().clone().detach().data) / placedb.total_movable_node_area
+        evaluate_result_dict['max_density'] = float(evaluate_result_dict['max_density'].cpu().clone().detach().data)
         for key,value in evaluate_result_dict.items():
             print(f"{key}: {value}")
         print("-------")
@@ -550,7 +947,7 @@ class GNNPlace():
         ax.add_collection(PatchCollection(patches, match_original=True))
         plt.savefig(dir_name)
 
-    def evaluate_from_numpy(self,tmp_cell_pos,placedb):
+    def evaluate_from_numpy(self,tmp_cell_pos,netlist_name,placedb,detail_placement=False,write_pl=False):
         """
         注明 DREAMPlace的pos和我们的有所不同，从它的代码里得知，它的工作follow的eplace
         eplace中使用了filler_node的一种虚拟节点，所以这里的pos为[(num_physical_nodes+num_filler_nodes)*2]的nn.ParameterList
@@ -581,17 +978,51 @@ class GNNPlace():
         
         # print(self.pos,cell_pos)
 
+        if detail_placement:
+            while True:
+                cell_pos[0] = self.legalize_cell(placedb,cell_pos[0])
+                if self.legalize_check(placedb,cell_pos[0]):
+                    break
+            assert self.legalize_check(placedb,cell_pos[0])
+            cell_pos[0] = self.detail_placement(placedb,cell_pos[0])
         # cell_pos[0] = self.legalize_cell(placedb,cell_pos[0])
         # cell_pos[0] = self.detail_placement(placedb,cell_pos[0])
         # print(self.legalize_check(placedb,cell_pos[0]))
         hpwl = self.evaluate_hpwl(placedb,cell_pos[0])
 
         # self.plot_cell(placedb,cell_pos[0].detach().cpu().numpy(),placedb.node_size_x,placedb.node_size_y,"/home/xuyanyang/RL/DREAMPlace/dreamplace/test_plot_cell.png")
-        self.draw_place(placedb,cell_pos[0])
-        rudy = self.evaluate_rudy(placedb,cell_pos[0])
+        self.draw_place(placedb,cell_pos[0],netlist_name)
+        rudy = self.evaluate_rudy(placedb,cell_pos[0],netlist_name if detail_placement else None)
+        if write_pl:
+            cur_pos = cell_pos[0].data.clone().cpu().numpy()
+            placedb.apply(
+                placedb.params,
+                cur_pos[0 : placedb.num_movable_nodes],
+                cur_pos[placedb.num_nodes : placedb.num_nodes + placedb.num_movable_nodes],
+            )
+            placedb.write(placedb.params,f'./result/{self.args.name}/{netlist_name}/{netlist_name}.{placedb.params.solution_file_suffix()}')
         
         return {'hpwl' : hpwl,
                 'rudy' : rudy}
+    
+    def evaluate_model(self,placedb_list,netlist_names,finetuning=0,name='train'):
+        self.logs.append({'epoch':0})
+        for placedb,netlist_name in zip(placedb_list,netlist_names):
+            netlist_name = netlist_name.split('/')[-1]
+            _ = self.evaluate_place(placedb,placedb.netlist,netlist_name,use_tqdm=False)
+        self.logs = [{'epoch':0}]
+        t0 = time.time()
+        for placedb,netlist_name in zip(placedb_list,netlist_names):
+            netlist_name = netlist_name.split('/')[-1]
+            metric_dict = self.evaluate_place(placedb,placedb.netlist,netlist_name,finetuning=finetuning,detail_placement=True,write_pl=True,use_tqdm=True)
+            d = {
+                f'{netlist_name}_hpwl':float(metric_dict['hpwl']),
+                f'{netlist_name}_rudy':float(metric_dict['rudy']),
+                f'{netlist_name}_overflow':float(metric_dict['overflow']),
+                f'{netlist_name}_max_density':float(metric_dict['max_density']),
+            }
+            self.logs[-1].update(d)
+        print(f"inference {name} time {time.time() - t0}")
         
     
     def legalize_check(self,placedb,cell_pos):
@@ -653,7 +1084,7 @@ class GNNPlace():
             yh=placedb.yh,
             site_width=placedb.site_width,
             row_height=placedb.row_height,
-            num_bins_x=1,
+            num_bins_x=64,
             num_bins_y=64,
             #num_bins_x=64, num_bins_y=64,
             num_movable_nodes=placedb.num_movable_nodes,
@@ -673,7 +1104,7 @@ class GNNPlace():
             yh=float(placedb.yh),
             site_width=float(placedb.site_width),
             row_height=float(placedb.row_height),
-            num_bins_x=1,
+            num_bins_x=64,
             num_bins_y=64,
             #num_bins_x=64, num_bins_y=64,
             num_movable_nodes=int(placedb.num_movable_nodes),
@@ -735,7 +1166,7 @@ class GNNPlace():
         # print(f"hpwl is {hpwl_value}")
         return hpwl_value
     
-    def draw_place(self,placedb,cell_pos):
+    def draw_place(self,placedb,cell_pos,netlist_name):
         """
         pin2node_map 每个pin所在node id
         site看起来是DEF文件定义的
@@ -751,6 +1182,10 @@ class GNNPlace():
                     ]
                 )
         """
+        if not os.path.exists(f"./result/{self.args.name}/{netlist_name}"):
+            if not os.path.exists(f"./result/{self.args.name}"):
+                os.mkdir(f"./result/{self.args.name}")
+            os.mkdir(f"./result/{self.args.name}/{netlist_name}")
         custom = PlaceDrawer.PlaceDrawer.forward(
                     cell_pos.detach().cpu(), 
                     torch.from_numpy(placedb.node_size_x), torch.from_numpy(placedb.node_size_y), 
@@ -761,11 +1196,11 @@ class GNNPlace():
                     placedb.bin_size_x, placedb.bin_size_y, 
                     placedb.num_movable_nodes, 
                     placedb.num_filler_nodes, 
-                    "/home/xuyanyang/RL/DREAMPlace/dreamplace/test.png" # png, jpg, eps, pdf, gds 
+                    f"./result/{self.args.name}/{netlist_name}/{netlist_name}.png" # png, jpg, eps, pdf, gds 
                     )
         # print(custom)
         
-    def evaluate_rudy(self,placedb,cell_pos):
+    def evaluate_rudy(self,placedb,cell_pos,plot_congestion_map=None):
         """
         unit_horizontal_capacity
         unit_vertical_capacity
@@ -788,14 +1223,106 @@ class GNNPlace():
                             xh=placedb.xh,
                             yl=placedb.yl,
                             yh=placedb.yh,
-                            num_bins_x=placedb.num_bins_x,
-                            num_bins_y=placedb.num_bins_y,
+                            num_bins_x=512,#placedb.num_bins_x,
+                            num_bins_y=512,#placedb.num_bins_y,
                             unit_horizontal_capacity=placedb.unit_horizontal_capacity,
                             unit_vertical_capacity=placedb.unit_vertical_capacity)
 
         result_cpu = rudy_op.forward(pin_pos_op(cell_pos))#self.op_collections.pin_pos_op(cell_pos[0].cuda())
         result_cpu = result_cpu.cpu().clone().detach().data
+        if plot_congestion_map is not None:
+            # im1 = Image.new('RGB',(placedb.num_bins_x,placedb.num_bins_y))
+            # im1 = Image.new('RGB',(512,512))
+            # for xi in range(512):
+            #     for yi in range(512):
+            #         im1.putpixel((xi,yi),(
+            #             int(result_cpu[xi,yi] * 255),0,0
+            #         ))
+            # im1 = im1.resize((512,512))
+            # im1.save(f"{plot_congestion_map}_rudy_map.png")
+            sns.set_style(rc = {'ytick.left':False, 'xtick.bottom':False})
+            fig = sns.heatmap(result_cpu,cmap="jet")
+            fig.invert_yaxis()
+            fig.set(yticklabels=[])
+            fig.set(xticklabels=[])
+            heatmap = fig.get_figure()
+            if not os.path.exists(f"./result/{self.args.name}/{plot_congestion_map}"):
+                if not os.path.exists(f"./result/{self.args.name}"):
+                    os.mkdir(f"./result/{self.args.name}")
+                os.mkdir(f"./result/{self.args.name}/{plot_congestion_map}")
+            heatmap.savefig(f"./result/{self.args.name}/{plot_congestion_map}/{plot_congestion_map}_rudy_map.png", dpi = 400)
+            plt.clf()
         return torch.max(result_cpu)
+    
+    def evaluate_overflow(self,placedb,cell_pos):
+        device = cell_pos.device
+        bin_size_x = (placedb.sub_netlist_info[-1]['xh'] - placedb.sub_netlist_info[-1]['xl']) / placedb.sub_netlist_info[-1]['num_bins_x']
+        bin_size_y = (placedb.sub_netlist_info[-1]['yh'] - placedb.sub_netlist_info[-1]['yl']) / placedb.sub_netlist_info[-1]['num_bins_y']
+        xl,xh = placedb.sub_netlist_info[-1]['xl'],placedb.sub_netlist_info[-1]['xh']
+        yl,yh = placedb.sub_netlist_info[-1]['yl'],placedb.sub_netlist_info[-1]['yh']
+        num_bins_x = placedb.sub_netlist_info[-1]['num_bins_x']
+        num_bins_y = placedb.sub_netlist_info[-1]['num_bins_y']
+
+        node_size_x = torch.from_numpy(placedb.node_size_x)
+        node_size_y = torch.from_numpy(placedb.node_size_y)
+
+        bin_size_x = placedb.sub_netlist_info[-1]['bin_size_x']
+        bin_size_y = placedb.sub_netlist_info[-1]['bin_size_y']
+
+        # cell_type = placedb.sub_netlist_info[-1]['cell_type']
+        num_moveable_cell = placedb.num_movable_nodes
+        moveable_size_x = node_size_x[:num_moveable_cell]
+        _, sorted_node_map = torch.sort(moveable_size_x)
+        sorted_node_map = sorted_node_map.to(torch.int32).to(device)
+        node_areas = node_size_x * node_size_y
+        mean_area = node_areas[:num_moveable_cell].mean().mul_(10)
+        row_height = node_size_y[:num_moveable_cell].min().mul_(2)
+        movable_macro_mask = ((node_areas[:num_moveable_cell] > mean_area) & \
+            (node_size_y[:num_moveable_cell] > row_height)).to(device)
+        
+        def bin_center_x_padded(xh_,xl_,padding,num_bins_x):
+            bin_size_x = (xh_ - xl_) / num_bins_x
+            xl = xl_ - padding * bin_size_x
+            xh = xh_ + padding * bin_size_x
+            bin_center_x = torch.from_numpy(
+                placedb.bin_centers(xl, xh, bin_size_x)).to(device)
+            return bin_center_x
+        def bin_center_y_padded(yh_,yl_,padding,num_bins_y):
+            bin_size_y = (yh_ - yl_) / num_bins_y
+            yl = yl_ - padding * bin_size_y
+            yh = yh_ + padding * bin_size_y
+            bin_center_y = torch.from_numpy(
+                placedb.bin_centers(yl, yh, bin_size_y)).to(device)
+            return bin_center_y
+        target_density = torch.empty(1,dtype=torch.float32,device=device)
+        target_density.data.fill_(0.9)
+        overflow_op = electric_overflow.ElectricOverflow(
+            node_size_x=torch.from_numpy(placedb.node_size_x),
+            node_size_y=torch.from_numpy(placedb.node_size_y),
+            bin_center_x=bin_center_x_padded(xl,xh, 0, num_bins_x),#此处函数实现直接抄DREAMPlace
+            bin_center_y=bin_center_y_padded(yl,yh, 0, num_bins_y),
+            target_density=torch.tensor(target_density,requires_grad=False).to(device),
+            xl=placedb.xl,
+            yl=placedb.yl,
+            xh=placedb.xh,
+            yh=placedb.yh,
+            bin_size_x=bin_size_x,
+            bin_size_y=bin_size_y,
+            num_movable_nodes=placedb.num_movable_nodes,
+            num_terminals=placedb.num_terminals,
+            num_filler_nodes=0,
+            padding=0,
+            deterministic_flag=False,
+            sorted_node_map=sorted_node_map,
+            movable_macro_mask=movable_macro_mask)
+        tmp_pos = torch.zeros_like(cell_pos,device=device)
+        num_nodes = cell_pos.size(0)
+        tmp_pos = tmp_pos.reshape([-1])
+        tmp_pos[:num_nodes] = cell_pos[:,0]
+        tmp_pos[num_nodes:] = cell_pos[:,1]
+        assert tmp_pos.ndimension() == 1
+        overflow = overflow_op(tmp_pos)
+        return overflow
     
 
     def detail_placement(self,placedb,cell_pos):
@@ -925,19 +1452,19 @@ class GNNPlace():
 
             # compute the scale factor for detailed placement
             # as the algorithms prefer integer coordinate systems
-            # scale_factor = params.scale_factor
-            scale_factor = 1.0#superblue2直接设的1我就把下面这些注释了
-            # if params.scale_factor != 1.0:
-            #     inv_scale_factor = int(round(1.0 / params.scale_factor))
-            #     prime_factors = prime_factorization(inv_scale_factor)
-            #     target_inv_scale_factor = 1
-            #     for factor in prime_factors:
-            #         if factor != 2 and factor != 5:
-            #             target_inv_scale_factor = inv_scale_factor
-            #             break
-            #     scale_factor = 1.0 / target_inv_scale_factor
-            #     logging.info("Deriving from system scale factor %g (1/%d)" % (params.scale_factor, inv_scale_factor))
-            #     logging.info("Use scale factor %g (1/%d) for detailed placement" % (scale_factor, target_inv_scale_factor))
+            scale_factor = placedb.params.scale_factor
+            # scale_factor = 1.0#superblue2直接设的1我就把下面这些注释了
+            if placedb.params.scale_factor != 1.0:
+                inv_scale_factor = int(round(1.0 / placedb.params.scale_factor))
+                prime_factors = prime_factorization(inv_scale_factor)
+                target_inv_scale_factor = 1
+                for factor in prime_factors:
+                    if factor != 2 and factor != 5:
+                        target_inv_scale_factor = inv_scale_factor
+                        break
+                scale_factor = 1.0 / target_inv_scale_factor
+                logging.info("Deriving from system scale factor %g (1/%d)" % (placedb.params.scale_factor, inv_scale_factor))
+                logging.info("Use scale factor %g (1/%d) for detailed placement" % (scale_factor, target_inv_scale_factor))
 
             for i in range(1):
                 pos1 = kr(pos1, scale_factor)
@@ -967,7 +1494,8 @@ class GNNPlace():
 
 def load_placedb(params_json_list,
                     netlist_names,
-                    name):
+                    name,
+                    save_type=1):
     """
     直接将所有placedb都进来存起来
     """
@@ -977,7 +1505,7 @@ def load_placedb(params_json_list,
         params = Params.Params()
         # load parameters
         params.load(param_json)
-        placedb = GNNPlaceDB(params,netlist_name,1)
+        placedb = GNNPlaceDB(params,netlist_name,save_type)
         print(f"load {netlist_name} netlist")
         print(f"num nodes {placedb.num_nodes}")
         print(f"num_physical_nodes {placedb.num_physical_nodes}")

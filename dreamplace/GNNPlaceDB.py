@@ -22,6 +22,7 @@ from thirdparty.TexasCyclone.data.graph import Netlist,Layout,expand_netlist
 from copy import deepcopy
 import dgl
 from tqdm import tqdm
+from grouping import create_group
 
 datatypes = {
         'float32' : np.float32,
@@ -105,9 +106,16 @@ class GNNPlaceDB(PlaceDB):
             get cell pos
             """
             if os.path.exists(f'{dir_name}/cell_pos.npy'):
-                cells_pos_corner = np.load(f'{dir_name}/cell_pos.npy')
+                cells_pos_corner = np.load(f'{dir_name}/cell_pos.npy') #* self.params.scale_factor# - self.params.shift_factor
             else:
                 cells_pos_corner = np.zeros(shape=[self.num_physical_nodes, 2], dtype=np.float)
+            print(self.xh,self.yh,self.xl,self.yl,params.shift_factor, params.scale_factor)
+            print(np.max(cells_pos_corner[cells_type.squeeze() < 1,:]))
+            print(np.min(cells_pos_corner[cells_type.squeeze() < 1,:]))
+            print(cells_pos_corner.shape)
+            print(self.num_physical_nodes)
+            print(self.num_nodes)
+            print(cells_size.size())
             cells_ref_pos = torch.tensor(cells_pos_corner, dtype=torch.float32) + cells_size / 2
             cells_pos = cells_ref_pos.clone()
             cells_pos[cells_type[:, 0] < 1e-5, :] = torch.nan
@@ -127,7 +135,27 @@ class GNNPlaceDB(PlaceDB):
                 with open(f'{dir_name}/cell_clusters.json') as fp:
                     cell_clusters = json.load(fp)
             else:
-                cell_clusters = None
+                print("Not find cell_cluster.json")
+                print("create cell_cluster.json")
+                graph = dgl.heterograph({
+                    ('cell', 'pins', 'net'): (cells, nets),
+                    ('net', 'pinned', 'cell'): (nets, cells),
+                    ('cell', 'points-to', 'cell'): ([], []),
+                    ('cell', 'pointed-from', 'cell'): ([], []),
+                }, num_nodes_dict={'cell': n_cell, 'net': n_net})
+                cell_prop_dict = {
+                    'size': cells_size,
+                    'type': cells_type,
+                }
+                create_group(graph=graph,
+                output_dir=dir_name,
+                cell_prop_dict=cell_prop_dict)
+                if os.path.exists(f'{dir_name}/cell_clusters.json'):
+                    with open(f'{dir_name}/cell_clusters.json') as fp:
+                        cell_clusters = json.load(fp)
+                else:
+                    cell_clusters = None
+            
             if os.path.exists(f'{dir_name}/layout_size.json'):
                 with open(f'{dir_name}/layout_size.json') as fp:
                     layout_size = json.load(fp)
@@ -139,49 +167,95 @@ class GNNPlaceDB(PlaceDB):
             same with load_data.py function:netlist_from_numpy_directory
             construct graph, cell/net/pin feature
             """
-            graph = dgl.heterograph({
+            # graph = dgl.heterograph({
+            #     ('cell', 'pins', 'net'): (cells, nets),
+            #     ('net', 'pinned', 'cell'): (nets, cells),
+            #     ('cell', 'points-to', 'cell'): ([], []),
+            #     ('cell', 'pointed-from', 'cell'): ([], []),
+            # }, num_nodes_dict={'cell': n_cell, 'net': n_net})
+            graph: dgl.DGLHeteroGraph = dgl.heterograph({
                 ('cell', 'pins', 'net'): (cells, nets),
                 ('net', 'pinned', 'cell'): (nets, cells),
                 ('cell', 'points-to', 'cell'): ([], []),
                 ('cell', 'pointed-from', 'cell'): ([], []),
+                ('cell', 'points-to-net', 'net'): ([], []),
+                ('cell', 'pointed-from-net', 'net'): ([], []),
             }, num_nodes_dict={'cell': n_cell, 'net': n_net})
 
             cells_feat = torch.cat([torch.log(cells_size), cells_degree], dim=-1)
             nets_feat = torch.cat([nets_degree], dim=-1)
             pins_feat = torch.cat([pins_pos / 1000, pins_io], dim=-1)
+            # np.save(f'{dir_name}/cell_data.npy',torch.stack([cells_degree.squeeze(),cells_size[:,0],cells_size[:,1],cells_type.squeeze()],dim=1).numpy())
+            # np.save(f'{dir_name}/cell_pos.npy',cells_pos_corner)
+            # assert os.path.exists(f'{dir_name}/old/cell_pos.npy')
+            # assert os.path.exists(f'{dir_name}/old/cell_data.npy')
+            # from matplotlib import pyplot as plt
+            # plt.scatter(cells_pos_corner[:,0],cells_pos_corner[:,1],s=1)
+            # plt.gca().add_patch(plt.Rectangle(xy=(0,0),
+            #                 width=self.xh, 
+            #                 height=self.yh,
+            #                 fill=False, linewidth=10))
+            # plt.savefig(f'{dir_name}/test.png')
+            # plt.clf()
+            # return
 
-            cell_prop_dict = {
-                'ref_pos': cells_ref_pos,
-                'pos': cells_pos,
-                'size': cells_size,
-                'feat': cells_feat,
-                'type': cells_type,
-            }
-            net_prop_dict = {
-                'degree': nets_degree,
-                'feat': nets_feat,
-            }
-            pin_prop_dict = {
-                'pos': pins_pos,
-                'io': pins_io,
-                'feat': pins_feat,
-            }
+            graph.nodes['cell'].data['ref_pos'] = cells_ref_pos
+            graph.nodes['cell'].data['pos'] = cells_pos
+            graph.nodes['cell'].data['size'] = cells_size
+            graph.nodes['cell'].data['feat'] = cells_feat
+            graph.nodes['cell'].data['type'] = cells_type
+            graph.nodes['net'].data['degree'] = nets_degree
+            graph.nodes['net'].data['feat'] = nets_feat
+            graph.edges['pinned'].data['pos'] = pins_pos
+            graph.edges['pinned'].data['io'] = pins_io
+            graph.edges['pinned'].data['feat'] = pins_feat
             self.netlist = Netlist(
                 graph=graph,
-                cell_prop_dict=cell_prop_dict,
-                net_prop_dict=net_prop_dict,
-                pin_prop_dict=pin_prop_dict,
                 layout_size=layout_size,
-                hierarchical=cell_clusters is not None,
+                hierarchical=cell_clusters is not None and len(cell_clusters),
                 cell_clusters=cell_clusters,
                 original_netlist=Netlist(
                     graph=deepcopy(graph),
-                    cell_prop_dict=deepcopy(cell_prop_dict),
-                    net_prop_dict=deepcopy(net_prop_dict),
-                    pin_prop_dict=deepcopy(pin_prop_dict),
                     layout_size=layout_size, simple=True
-                )
+                ),
+                temp_device="cuda:0"
             )
+            if save_type != 0:
+                with open(netlist_pickle_path, 'wb+') as fp:
+                    pickle.dump(self.netlist, fp)
+
+            # cell_prop_dict = {
+            #     'ref_pos': cells_ref_pos,
+            #     'pos': cells_pos,
+            #     'size': cells_size,
+            #     'feat': cells_feat,
+            #     'type': cells_type,
+            # }
+            # net_prop_dict = {
+            #     'degree': nets_degree,
+            #     'feat': nets_feat,
+            # }
+            # pin_prop_dict = {
+            #     'pos': pins_pos,
+            #     'io': pins_io,
+            #     'feat': pins_feat,
+            # }
+            # self.netlist = Netlist(
+            #     graph=graph,
+            #     cell_prop_dict=cell_prop_dict,
+            #     net_prop_dict=net_prop_dict,
+            #     pin_prop_dict=pin_prop_dict,
+            #     layout_size=layout_size,
+            #     hierarchical=cell_clusters is not None,
+            #     cell_clusters=cell_clusters,
+            #     original_netlist=Netlist(
+            #         graph=deepcopy(graph),
+            #         cell_prop_dict=deepcopy(cell_prop_dict),
+            #         net_prop_dict=deepcopy(net_prop_dict),
+            #         pin_prop_dict=deepcopy(pin_prop_dict),
+            #         layout_size=layout_size, simple=True
+            #     )
+            # )
         
         """
         extra info for placedb 
@@ -198,22 +272,23 @@ class GNNPlaceDB(PlaceDB):
         for nid,sub_netlist in tqdm(dict_netlist.items()):
             self.sub_netlist_info[nid] = {}
             cells,nets = sub_netlist.graph.edges(etype='pins')
-            pin_pos = sub_netlist.pin_prop_dict['pos']
+            pin_pos = sub_netlist.graph.edges['pinned'].data['pos']
             self.sub_netlist_info[nid]['num_physical_nodes'] = sub_netlist.graph.num_nodes(ntype='cell')
             self.sub_netlist_info[nid]['num_nets'] = sub_netlist.graph.num_nodes(ntype='net')
             self.sub_netlist_info[nid]['pin_offset_x'] = pin_pos[:,0]
             self.sub_netlist_info[nid]['pin_offset_y'] = pin_pos[:,1]
-            self.sub_netlist_info[nid]['node_size_x'] = sub_netlist.cell_prop_dict['size'][:,0]
-            self.sub_netlist_info[nid]['node_size_y'] = sub_netlist.cell_prop_dict['size'][:,1]
-            self.sub_netlist_info[nid]['cell_type'] = sub_netlist.cell_prop_dict['type']
+            self.sub_netlist_info[nid]['node_size_x'] = sub_netlist.graph.nodes['cell'].data['size'][:,0]
+            self.sub_netlist_info[nid]['node_size_y'] = sub_netlist.graph.nodes['cell'].data['size'][:,1]
+            self.sub_netlist_info[nid]['cell_type'] = sub_netlist.graph.nodes['cell'].data['type']
             self.sub_netlist_info[nid]['layout_size'] = sub_netlist.layout_size#
+            self.sub_netlist_info[nid]['span'] = (sub_netlist.graph.nodes['cell'].data['size'][:,0] * sub_netlist.graph.nodes['cell'].data['size'][:,1]).sum()
             if nid != -1:
                 """
                 现在sub netlist: layout size
                 cell总面积的sqrt(n)*0.5+1 (n为sub netlist中cell数目)
                 这样做的目的是让含有cell多的netlist有更大的layout 去调整
                 """
-                span = (sub_netlist.cell_prop_dict['size'][:,0] * sub_netlist.cell_prop_dict['size'][:,1]).sum()
+                span = (sub_netlist.graph.nodes['cell'].data['size'][:,0] * sub_netlist.graph.nodes['cell'].data['size'][:,1]).sum()
                 self.sub_netlist_info[nid]['width'],\
                     self.sub_netlist_info[nid]['height'] = span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 5), \
                                                             span ** 0.5 * (math.sqrt(sub_netlist.graph.num_nodes(ntype='cell'))*0.01 + 5)
@@ -241,14 +316,17 @@ class GNNPlaceDB(PlaceDB):
                 self.sub_netlist_info[nid]['num_bins_y'] = min(self.sub_netlist_info[nid]['num_bins_y'],1024)
                 # self.netlist.dict_sub_netlist[nid].layout_size = (self.sub_netlist_info[nid]['width'],self.sub_netlist_info[nid]['height'])
             else:
-                self.sub_netlist_info[nid]['width'],self.sub_netlist_info[nid]['height'] = sub_netlist.layout_size
+                self.sub_netlist_info[nid]['width'],self.sub_netlist_info[nid]['height'] = self.xh,self.yh
                 self.sub_netlist_info[nid]['xl'], self.sub_netlist_info[nid]['xh'] = 0,self.sub_netlist_info[nid]['width']
                 self.sub_netlist_info[nid]['yl'], self.sub_netlist_info[nid]['yh'] = 0,self.sub_netlist_info[nid]['height']
                 self.sub_netlist_info[nid]['num_bins_x'],\
-                    self.sub_netlist_info[nid]['num_bins_y'] = 1024,\
-                                        1024
+                    self.sub_netlist_info[nid]['num_bins_y'] = 512,\
+                                        512
             self.sub_netlist_info[nid]['bin_size_x'] = self.sub_netlist_info[nid]['width'] / self.sub_netlist_info[nid]['num_bins_x']
             self.sub_netlist_info[nid]['bin_size_y'] = self.sub_netlist_info[nid]['height'] / self.sub_netlist_info[nid]['num_bins_y']
+
+            sub_netlist.layout_size = (self.sub_netlist_info[nid]['width'],self.sub_netlist_info[nid]['height'])
+            self.sub_netlist_info[nid]['layout_size'] = sub_netlist.layout_size#
             
 
             self.sub_netlist_info[nid]['pin2node_map'] = cells
@@ -278,7 +356,7 @@ class GNNPlaceDB(PlaceDB):
                     #     pin_mask_ignore_fixed_macros[pin_id] = 1
                     pass
                 else:
-                    if sub_netlist.cell_prop_dict['type'][cell,0] > 0:
+                    if sub_netlist.graph.nodes['cell'].data['type'][cell,0] > 0:
                         pin_mask_ignore_fixed_macros[pin_id] = 1
             self.sub_netlist_info[nid]['pin2net_map'] = pin2net_map
             
@@ -320,6 +398,11 @@ class GNNPlaceDB(PlaceDB):
             )
 
             self.sub_netlist_info[nid]['pin_mask_ignore_fixed_macros'] = pin_mask_ignore_fixed_macros
+
+            num_pins_in_nodes = np.zeros(sub_netlist.graph.num_nodes(ntype='cell'))
+            for i in range(sub_netlist.graph.num_nodes(ntype='cell')):
+                num_pins_in_nodes[i] = len(node2pin_map[i])
+            self.sub_netlist_info[nid]['num_pins_in_nodes'] = torch.tensor(num_pins_in_nodes)
 
 
 
