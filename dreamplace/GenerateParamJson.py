@@ -1,12 +1,17 @@
-def create_param_json(netlist_dir,param_dir):
+import os.path as osp
+import json
+
+def create_param_json(netlist_dir,param_dir,ourmodel=False):
     param = {}
-    param["lef_input"] = osp.join(param_dir,"all.lef")
-    param["def_input"] = osp.join(param_dir,"top.def")
-    param["verilog_input"] = osp.join(param_dir,"top.v")
+    param["lef_input"] = [osp.join(netlist_dir,"mgc_fft_1.lef")]
+    param["def_input"] = osp.join(netlist_dir,"mgc_fft_1.def")
+    # param["verilog_input"] = osp.join(netlist_dir,"top.v")
     param["gpu"] = 1
     param["num_bins_x"] = 1024
     param["num_bins_y"] = 1024
     param["global_place_stages"] = [{"num_bins_x" : 1024, "num_bins_y" : 1024, "iteration" : 1000, "learning_rate" : 0.01, "wirelength" : "weighted_average", "optimizer" : "nesterov"}]
+    if ourmodel:
+        param["global_place_stages"] = [{"num_bins_x" : 1024, "num_bins_y" : 1024, "iteration" : 400, "learning_rate" : 0.01, "learning_rate_decay":0.97,"wirelength" : "weighted_average", "optimizer" : "adam"}]
     param["target_density"] = 0.65
     param["density_weight"] = 8e-5
     param["gamma"] = 4.0
@@ -26,6 +31,6 @@ def create_param_json(netlist_dir,param_dir):
     param["sort_nets_by_degree"] = 0
     param["num_threads"] = 8
     param["sol_file_format"] = "DEF"
-    json_data = json.dumps(param)
+    json_data = json.dumps(param).replace(", ",",\r    ")
     with open(param_dir,"w") as f:
         f.write(json_data)

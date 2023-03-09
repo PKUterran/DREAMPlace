@@ -155,7 +155,8 @@ def create_group(
     graph:dgl.DGLHeteroGraph,
     output_dir: str,
     cell_prop_dict = None,
-    keep_cluster_file:bool = False):
+    keep_cluster_file:bool = False,
+    use_kahypar="kahypar"):
     """
     keep_cluster_file是否保留中间结果文件
     """
@@ -164,11 +165,19 @@ def create_group(
     if blocks < 2:
         return
     hmetis_input_filename = os.path.join(output_dir,'graph.input')
-    create_input_graph_file(graph,hmetis_input_filename,None)
-    cmd = f"./thirdparty/kahypar/build/kahypar/application/KaHyPar -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ../kahypar/config/km1_kKaHyPar_sea20.ini -w true"
+    create_input_graph_file(graph,hmetis_input_filename,cell_prop_dict)
+    use_kahypar = "kahypar"
+    if use_kahypar == "kahypar":
+        cmd = f"./thirdparty/kahypar/build/kahypar/application/KaHyPar -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/kahypar/config/km1_kKaHyPar_sea20.ini -w true"
+        grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed-1.KaHyPar")
+    elif use_kahypar == "mt_fast":
+        cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyParFast -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/mt-kahypar/config/fast_preset.ini -t 24"
+        grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed0.KaHyPar")
+    elif use_kahypar == "mt_strong":
+        cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyParStrong -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/mt-kahypar/config/strong_preset.ini -t 24"
+        grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed0.KaHyPar")
     print(cmd)
     os.system(cmd)
-    grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed-1.KaHyPar")
     cluster_json_filename = os.path.join(output_dir,"cell_clusters.json")
     theta = 1e9#(cell_prop_dict['size'][:,0] * cell_prop_dict['size'][:,1]).mean()#200
     create_cluster_json(graph,grouping_filename,cluster_json_filename,blocks,theta,cell_prop_dict)

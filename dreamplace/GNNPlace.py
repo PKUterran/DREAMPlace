@@ -63,6 +63,8 @@ from tqdm import tqdm
 from torch.autograd import Function, Variable
 import argparse
 import gc
+import re
+import collections
 
 
 
@@ -114,7 +116,11 @@ class GNNPlace():
         if dir_name:
             print(f'\tUsing model {dir_name}')
             model_dicts = torch.load(f'{dir_name}', map_location=device)
-            self.model.load_state_dict(model_dicts)
+            tmp_OrderedDict = collections.OrderedDict()
+            for name,v in model_dicts.items():
+                new_name = name.replace("pins.bias","pins.fc_self.bias").replace("points-to.bias","points-to.fc_self.bias")
+                tmp_OrderedDict[new_name] = v
+            self.model.load_state_dict(tmp_OrderedDict)
             self.model.eval()
     
     

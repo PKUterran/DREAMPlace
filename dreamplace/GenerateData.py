@@ -27,11 +27,17 @@ import os.path as osp
 from dreamplace import NonLinearPlace
 import json
 
-def generate_data(netlist_dir:str,params,save_type=1):
+def generate_data(netlist_dir:str,params,save_type=1,for_test=False):
     data_file_list = ['cell_pos.npy', 'cell_data.npy','net_data.npy','pin_data.npy','pin_net_cell.npy','cell_clusters.json','layout_size.json']
-    flag = True
-    placedb = PlaceDB.PlaceDB()
-    placedb(params)
+    if for_test:
+        data_file_list = ['cell_clusters.json','layout_size.json']
+    flag = False
+    for data_file_name in data_file_list:
+        if not os.path.exists(osp.join(netlist_dir,data_file_name)) or save_type == 2:
+            flag = True
+    if flag:
+        placedb = PlaceDB.PlaceDB()
+        placedb(params)
     for data_file_name in data_file_list:
         if not os.path.exists(osp.join(netlist_dir,data_file_name)) or save_type == 2:
             if data_file_name == 'cell_data.npy':

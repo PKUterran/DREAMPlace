@@ -691,8 +691,11 @@ class NonLinearPlace(BasicPlace.BasicPlace):
             lr = param_group["lr"]
             break
         print(f"learning rate {lr}")
-        save_gp_path = f"{params.save_gp_dir}.gp.{params.solution_file_suffix()}"
-        palcedb.write(params,save_gp_path)
+        if hasattr(params,'save_gp_dir'):
+            save_gp_path = f"{params.save_gp_dir}.gp.{params.solution_file_suffix()}"
+            placedb.write(params,save_gp_path)
+        all_metrics[-1].optimizer_time = optimizer_time
+        all_metrics[-1].true_hpwl = self.op_collections.hpwl_op(self.pos[0]).data / params.scale_factor
         # iteration += 1
         # path = "%s/%s" % (params.result_dir, params.design_name())
         # all_metrics = all_metrics[:-2]

@@ -30,7 +30,7 @@ def generate_data_list(netlist_dir_list:List[str],param_dir_list:List[str],save_
             create_param_json(netlist_dir,param_dir)
         params = Params.Params()
         params.load(param_dir)
-        generate_data(netlist_dir,params,save_type)
+        generate_data(netlist_dir,params,save_type,for_test=False)
         
 if __name__ == '__main__':
     train_param_json_list = [
