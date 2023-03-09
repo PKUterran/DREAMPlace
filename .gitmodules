@@ -16,6 +16,3 @@
 [submodule "thirdparty/kahypar"]
 	path = thirdparty/kahypar
 	url = https://github.com/sorarain/kahypar.git
-[submodule "thirdparty/mt-kahypar"]
-	path = thirdparty/mt-kahypar
-	url = https://github.com/sorarain/mt-kahypar.git

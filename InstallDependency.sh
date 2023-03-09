@@ -6,6 +6,7 @@ apt-get install bison
 apt-get install flex -y
 
 pip install seaborn
+pip install -r requirements.txt 
 pip install --pre dgl -f https://data.dgl.ai/wheels/cu113/repo.html
 pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 pip install pympler
