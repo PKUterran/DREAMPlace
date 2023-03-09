@@ -1,6 +1,5 @@
 import os
 import sys
-# sys.path.append('/home/xuyanyang/RL/DREAMPlace/build')
 sys.path.append(os.path.join(os.path.abspath('.'),'build'))
 sys.path.append(os.path.abspath('.'))
 
@@ -160,13 +159,14 @@ def create_group(
     """
     keep_cluster_file是否保留中间结果文件
     """
-    # blocks = int(math.sqrt(graph.num_nodes('cell')))#math.ceil(graph.num_nodes('cell') / 200000)
-    blocks = math.ceil(graph.num_nodes('cell') / 50000)
+    blocks = int(math.sqrt(graph.num_nodes('cell')))#math.ceil(graph.num_nodes('cell') / 200000)
+    # blocks = math.ceil(graph.num_nodes('cell') / 50000)
     if blocks < 2:
         return
     hmetis_input_filename = os.path.join(output_dir,'graph.input')
-    create_input_graph_file(graph,hmetis_input_filename,cell_prop_dict)
-    cmd = f"/home/xuyanyang/RL/kahypar/build/kahypar/application/KaHyPar -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p /home/xuyanyang/RL/kahypar/config/km1_kKaHyPar_sea20.ini -w true"
+    create_input_graph_file(graph,hmetis_input_filename,None)
+    cmd = f"./thirdparty/kahypar/build/kahypar/application/KaHyPar -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ../kahypar/config/km1_kKaHyPar_sea20.ini -w true"
+    print(cmd)
     os.system(cmd)
     grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed-1.KaHyPar")
     cluster_json_filename = os.path.join(output_dir,"cell_clusters.json")

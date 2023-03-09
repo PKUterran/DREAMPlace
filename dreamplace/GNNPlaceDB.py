@@ -1,6 +1,8 @@
 import sys
 import os
-sys.path.append('/home/xuyanyang/RL/DREAMPlace/build')
+sys.path.append(os.path.abspath('.'))
+sys.path.append('./build')
+sys.path.append('./thirdparty/TexasCyclone')
 import re
 import math
 import time
@@ -14,8 +16,6 @@ import pdb
 from PlaceDB import PlaceDB
 import pickle
 import json
-sys.path.append(os.path.abspath('.'))
-sys.path.append('./thirdparty/TexasCyclone')
 from thirdparty.TexasCyclone.data.graph.Netlist import Netlist
 from thirdparty.TexasCyclone.train.argument import parse_train_args
 from thirdparty.TexasCyclone.data.graph import Netlist,Layout,expand_netlist
@@ -224,38 +224,6 @@ class GNNPlaceDB(PlaceDB):
                 with open(netlist_pickle_path, 'wb+') as fp:
                     pickle.dump(self.netlist, fp)
 
-            # cell_prop_dict = {
-            #     'ref_pos': cells_ref_pos,
-            #     'pos': cells_pos,
-            #     'size': cells_size,
-            #     'feat': cells_feat,
-            #     'type': cells_type,
-            # }
-            # net_prop_dict = {
-            #     'degree': nets_degree,
-            #     'feat': nets_feat,
-            # }
-            # pin_prop_dict = {
-            #     'pos': pins_pos,
-            #     'io': pins_io,
-            #     'feat': pins_feat,
-            # }
-            # self.netlist = Netlist(
-            #     graph=graph,
-            #     cell_prop_dict=cell_prop_dict,
-            #     net_prop_dict=net_prop_dict,
-            #     pin_prop_dict=pin_prop_dict,
-            #     layout_size=layout_size,
-            #     hierarchical=cell_clusters is not None,
-            #     cell_clusters=cell_clusters,
-            #     original_netlist=Netlist(
-            #         graph=deepcopy(graph),
-            #         cell_prop_dict=deepcopy(cell_prop_dict),
-            #         net_prop_dict=deepcopy(net_prop_dict),
-            #         pin_prop_dict=deepcopy(pin_prop_dict),
-            #         layout_size=layout_size, simple=True
-            #     )
-            # )
         
         """
         extra info for placedb 

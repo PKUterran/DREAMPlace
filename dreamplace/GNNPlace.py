@@ -907,8 +907,9 @@ class GNNPlace():
         if not os.path.exists(f"./result/{self.args.name}/{netlist_name}"):
             os.mkdir(f"./result/{self.args.name}/{netlist_name}")
         np.save(f'./result/{self.args.name}/{netlist_name}/{netlist_name}.npy',evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy())
+        if hasattr(self,"jump_LGDP"):
+            return {}
         evaluate_result_dict = self.evaluate_from_numpy(evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy(),netlist_name,placedb,detail_placement,write_pl)#evaluate_cell_pos_corner_dict[netlist_name].detach().cpu().numpy()
-        # evaluate_result_dict['hpwl'] /= placedb.params.scale_factor
         evaluate_result_dict['overflow'],evaluate_result_dict['max_density'] = self.evaluate_overflow(placedb,evaluate_cell_pos_corner_dict[netlist_name].detach().cpu())
         evaluate_result_dict['overflow'] = float(evaluate_result_dict['overflow'].cpu().clone().detach().data) / placedb.total_movable_node_area
         evaluate_result_dict['max_density'] = float(evaluate_result_dict['max_density'].cpu().clone().detach().data)

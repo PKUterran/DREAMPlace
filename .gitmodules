@@ -1,15 +1,18 @@
 [submodule "thirdparty/Limbo"]
 	path = thirdparty/Limbo
-	url = https://github.com/limbo018/Limbo.git
+	url = https://gitee.com/zlwkoh/Limbo.git
 [submodule "thirdparty/munkres-cpp"]
 	path = thirdparty/munkres-cpp
-	url = https://github.com/saebyn/munkres-cpp.git
+	url = https://gitee.com/zlwkoh/munkres-cpp.git
 [submodule "thirdparty/cub"]
 	path = thirdparty/cub
-	url = https://github.com/NVlabs/cub.git
+	url = https://gitee.com/yupanpanw/cub.git
 [submodule "thirdparty/pybind11"]
 	path = thirdparty/pybind11
 	url = https://github.com/pybind/pybind11.git
 [submodule "thirdparty/TexasCyclone"]
 	path = thirdparty/TexasCyclone
 	url = https://github.com/PKUterran/TexasCyclone.git
+[submodule "thirdparty/kahypar"]
+	path = thirdparty/kahypar
+	url = https://github.com/sorarain/kahypar.git

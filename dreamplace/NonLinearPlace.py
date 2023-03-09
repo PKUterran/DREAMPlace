@@ -607,6 +607,7 @@ class NonLinearPlace(BasicPlace.BasicPlace):
                 #     all_metrics.append([best_metric])
 
                 logging.info("optimizer %s takes %.3f seconds" % (optimizer_name, time.time() - tt))
+                optimizer_time = time.time() - tt
 
             # recover node size and pin offset for legalization, since node size is adjusted in global placement
             if params.routability_opt_flag:
@@ -682,6 +683,36 @@ class NonLinearPlace(BasicPlace.BasicPlace):
             cur_pos[0 : placedb.num_movable_nodes],
             cur_pos[placedb.num_nodes : placedb.num_nodes + placedb.num_movable_nodes],
         )
+        ###############
+        print("True HPWL %.6E" % (self.op_collections.hpwl_op(self.pos[0]).data / params.scale_factor))
+        print(f"optimizer takes {optimizer_time} s")
+        lr = 0
+        for param_group in optimizer.param_groups:
+            lr = param_group["lr"]
+            break
+        print(f"learning rate {lr}")
+        save_gp_path = f"{params.save_gp_dir}.gp.{params.solution_file_suffix()}"
+        palcedb.write(params,save_gp_path)
+        # iteration += 1
+        # path = "%s/%s" % (params.result_dir, params.design_name())
+        # all_metrics = all_metrics[:-2]
+        # import re
+        # epochs = [int([float(s) for s in re.findall(r'-?\d+\.?\d*', str(metric))][0]) for metric in all_metrics]#hpwl 6 maxdensity 8
+        # hpwl = [[float(s) for s in re.findall(r'-?\d+\.?\d*', str(metric))][8]*pow(10,[float(s) for s in re.findall(r'-?\d+\.?\d*', str(metric))][9]) for metric in all_metrics]
+        # max_density = [[float(s) for s in re.findall(r'-?\d+\.?\d*', str(metric))][12]*pow(10,[float(s) for s in re.findall(r'-?\d+\.?\d*', str(metric))][13]) for metric in all_metrics]
+        # from matplotlib import pyplot as plt
+        # fig = plt.figure(figsize=(12, 10))
+        # plt.plot(epochs,hpwl,label='hpwl')
+        # plt.yscale('log')
+        # plt.legend()
+        # plt.savefig("%s/plot/hpwl.png" % (path))
+        # plt.clf()
+        # plt.plot(epochs,max_density,label='max_density')
+        # plt.yscale('log')
+        # plt.legend()
+        # plt.savefig("%s/plot/max_density.png" % (path))
+        # plt.clf()
+        ###############
         # plot placement
         if params.plot_flag:
             self.plot(params, placedb, iteration, cur_pos)
