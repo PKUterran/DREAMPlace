@@ -51,8 +51,8 @@ if __name__ == '__main__':
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
         # 'test/OurModel/mgc_fft_1/mgc_fft_1.json',
-        # 'test/OurModel/ispd19_test1/ispd19_test1.json',
-        'test/OurModel/mgc_superblue19/mgc_superblue19.json'
+        'test/OurModel/ispd19_test1/ispd19_test1.json',
+        # 'test/OurModel/mgc_superblue19/mgc_superblue19.json'
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
@@ -63,8 +63,8 @@ if __name__ == '__main__':
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
-        f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test1'
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test1'
     ]
     ############Train
     generate_data_list(test_netlist_names,test_param_json_list)
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "%d" % (16)
     args = parse_train_args()
     jump_model_inference = False
-    if not jump_ourmodel:
+    if not jump_model_inference:
         test_placedb_list = load_placedb(test_param_json_list,test_netlist_names,'test',2)
         device = torch.device(args.device)
         config = {

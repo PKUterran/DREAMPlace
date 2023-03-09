@@ -1,15 +1,19 @@
-# apt-get update
-# apt-get install libboost-all-dev -y
-# apt search boost -y
+apt-get update
+apt-get install libboost-all-dev -y
+apt search boost -y
 
-# apt-get install bison
-# apt-get install flex -y
+apt-get install bison
+apt-get install flex -y
 
-# pip install seaborn
-# pip install --pre dgl -f https://data.dgl.ai/wheels/cu113/repo.html
-# pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
-# pip install pympler
-# pip install memory_profiler
+pip install seaborn
+pip install --pre dgl -f https://data.dgl.ai/wheels/cu113/repo.html
+pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
+pip install pympler
+pip install memory_profiler
+mkdir model
+mkdir result
+mkdir -p log/pretrain
+mkdir -p log/train
 
 cd thirdparty/kahypar
 mkdir build 

@@ -41,7 +41,7 @@ if __name__ == '__main__':
                         stream=sys.stdout)
     test_param_json_list = [
         # 'test/dac2012/superblue2.json'
-        'test/ispd2015/lefdef/mgc_fft_1.json',
+        # 'test/ispd2015/lefdef/mgc_fft_1.json',
         # 'test/ispd2015/lefdef/mgc_fft_2.json',
         # 'test/ispd2015/lefdef/mgc_fft_a.json',
         # 'test/ispd2015/lefdef/mgc_fft_b.json',
@@ -49,11 +49,11 @@ if __name__ == '__main__':
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
-        # 'test/DREAMPlace/ispd19_test1/ispd19_test1.json'
+        'test/DREAMPlace/ispd19_test1/ispd19_test1.json'
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
@@ -61,7 +61,7 @@ if __name__ == '__main__':
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test1'
+        f'{NETLIST_DIR}/ispd2019/ispd19_test1'
     ]
     ############Train
     generate_param_list(test_netlist_names,test_param_json_list)
@@ -74,6 +74,7 @@ if __name__ == '__main__':
         params.load(param_dir)
         placedb = PlaceDB.PlaceDB()
         placedb(params)
+        netlist_name = netlist_name.split('/')[-1]
         os.system(f"mkdir -p ./result/DREAMPlace/{netlist_name}")
         params.__dict__["save_gp_dir"] = f"./result/DREAMPlace/{netlist_name}/DREAMPlace_{netlist_name}"
         placer = NonLinearPlace.NonLinearPlace(params, placedb)

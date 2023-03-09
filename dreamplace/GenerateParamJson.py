@@ -3,8 +3,8 @@ import json
 
 def create_param_json(netlist_dir,param_dir,ourmodel=False):
     param = {}
-    param["lef_input"] = [osp.join(netlist_dir,"mgc_fft_1.lef")]
-    param["def_input"] = osp.join(netlist_dir,"mgc_fft_1.def")
+    param["lef_input"] = [osp.join(netlist_dir,"ispd19_test1.input.lef")]
+    param["def_input"] = osp.join(netlist_dir,"ispd19_test1.input.def")
     # param["verilog_input"] = osp.join(netlist_dir,"top.v")
     param["gpu"] = 1
     param["num_bins_x"] = 1024

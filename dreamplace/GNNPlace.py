@@ -4,7 +4,8 @@ import operator
 import os
 import random
 import sys
-sys.path.append('/home/xuyanyang/RL/DREAMPlace/build')
+sys.path.append(os.path.join(os.path.abspath('.'),'build'))
+sys.path.append(os.path.abspath('.'))
 import time
 import pickle
 import numpy as np
