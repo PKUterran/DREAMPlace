@@ -26,6 +26,8 @@ LOG_DIR = 'log/pretrain'
 FIG_DIR = 'visualize/pretrain'
 MODEL_DIR = 'model'
 NETLIST_DIR='benchmarks'
+# PARAM_DIR='test/ispd2015/lefdef'
+PARAM_DIR='test/OurModel'
 
 def generate_param_list(netlist_dir_list:List[str],param_dir_list:List[str]):
     for netlist_dir,param_dir in zip(netlist_dir_list,param_dir_list):
@@ -49,10 +51,22 @@ if __name__ == '__main__':
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
-        'test/DREAMPlace/ispd19_test1/ispd19_test1.json'
+        # 'test/DREAMPlace/ispd19_test1/ispd19_test1.json'
+        f'{PARAM_DIR}/mgc_des_perf_1.json',
+        # f'{PARAM_DIR}/mgc_fft_1.json',
+        # f'{PARAM_DIR}/mgc_fft_2.json',
+        # f'{PARAM_DIR}/mgc_fft_a.json',
+        # f'{PARAM_DIR}/mgc_fft_b.json',
+        # f'{PARAM_DIR}/mgc_matrix_mult_1.json',
+        # f'{PARAM_DIR}/mgc_matrix_mult_2.json',
+        # f'{PARAM_DIR}/mgc_matrix_mult_a.json',
+        # f'{PARAM_DIR}/mgc_superblue19.json',
+        f'{PARAM_DIR}/mgc_superblue12.json',
+        f'{PARAM_DIR}/mgc_superblue14.json',
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
+        f'{NETLIST_DIR}/ispd2015/mgc_des_perf_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
@@ -61,7 +75,9 @@ if __name__ == '__main__':
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
-        f'{NETLIST_DIR}/ispd2019/ispd19_test1'
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test1'
+        f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
+        f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
     ]
     ############Train
     generate_param_list(test_netlist_names,test_param_json_list)
@@ -76,7 +92,7 @@ if __name__ == '__main__':
         placedb(params)
         netlist_name = netlist_name.split('/')[-1]
         os.system(f"mkdir -p ./result/DREAMPlace/{netlist_name}")
-        params.__dict__["save_gp_dir"] = f"./result/DREAMPlace/{netlist_name}/DREAMPlace_{netlist_name}"
+        params.__dict__["save_gp_dir"] = f"./result/DREAMPlace/{netlist_name}/DREAMPlace_adam{netlist_name}"
         placer = NonLinearPlace.NonLinearPlace(params, placedb)
         metrics = placer(params, placedb)
         result[netlist_name] ={}

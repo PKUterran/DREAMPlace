@@ -988,11 +988,11 @@ class GNNPlace():
 
         if detail_placement:
             while True:
-                cell_pos[0] = self.legalize_cell(placedb,cell_pos[0])
+                cell_pos[0] = nn.Parameter(self.legalize_cell(placedb,cell_pos[0]))
                 if self.legalize_check(placedb,cell_pos[0]):
                     break
             assert self.legalize_check(placedb,cell_pos[0])
-            cell_pos[0] = self.detail_placement(placedb,cell_pos[0])
+            cell_pos[0] = nn.Parameter(self.detail_placement(placedb,cell_pos[0]))
         # cell_pos[0] = self.legalize_cell(placedb,cell_pos[0])
         # cell_pos[0] = self.detail_placement(placedb,cell_pos[0])
         # print(self.legalize_check(placedb,cell_pos[0]))

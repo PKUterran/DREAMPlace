@@ -36,9 +36,9 @@ if __name__ == '__main__':
     train_param_json_list = [
         # 'test/dac2012/superblue2.json'
         'test/ispd2015/lefdef/mgc_fft_1.json',
-        # 'test/ispd2015/lefdef/mgc_fft_2.json',
-        # 'test/ispd2015/lefdef/mgc_fft_a.json',
-        # 'test/ispd2015/lefdef/mgc_fft_b.json',
+        'test/ispd2015/lefdef/mgc_fft_2.json',
+        'test/ispd2015/lefdef/mgc_fft_a.json',
+        'test/ispd2015/lefdef/mgc_fft_b.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_1.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
@@ -47,9 +47,9 @@ if __name__ == '__main__':
     train_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
         f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
@@ -58,44 +58,48 @@ if __name__ == '__main__':
     valid_param_json_list = [
         # 'test/dac2012/superblue2.json'
         'test/ispd2015/lefdef/mgc_fft_1.json',
-        # 'test/ispd2015/lefdef/mgc_fft_2.json',
-        # 'test/ispd2015/lefdef/mgc_fft_a.json',
-        # 'test/ispd2015/lefdef/mgc_fft_b.json',
+        'test/ispd2015/lefdef/mgc_fft_2.json',
+        'test/ispd2015/lefdef/mgc_fft_a.json',
+        'test/ispd2015/lefdef/mgc_fft_b.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_1.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
+        # 'test/ispd2015/lefdef/mgc_superblue14.json',
     ]
     valid_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
         f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
     ]
     test_param_json_list = [
         # 'test/dac2012/superblue2.json'
         'test/ispd2015/lefdef/mgc_fft_1.json',
-        # 'test/ispd2015/lefdef/mgc_fft_2.json',
-        # 'test/ispd2015/lefdef/mgc_fft_a.json',
-        # 'test/ispd2015/lefdef/mgc_fft_b.json',
+        'test/ispd2015/lefdef/mgc_fft_2.json',
+        'test/ispd2015/lefdef/mgc_fft_a.json',
+        'test/ispd2015/lefdef/mgc_fft_b.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_1.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
+        # 'test/ispd2015/lefdef/mgc_superblue12.json',
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
         f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
     ]
     generate_data_list(train_netlist_names,train_param_json_list,1)
     generate_data_list(valid_netlist_names,valid_param_json_list,1)
@@ -105,6 +109,9 @@ if __name__ == '__main__':
     check_dir(FIG_DIR)
     check_dir(MODEL_DIR)
     args = parse_pretrain_args()
+    args.lr = 5e-5
+    name = args.name
+    args.name = "pretrain_"+name
     pretrain_ours(
         args=args,
         train_datasets=train_netlist_names,
@@ -134,7 +141,13 @@ if __name__ == '__main__':
     raw_cell_feats = sample_netlist.graph.nodes['cell'].data['feat'].shape[1]
     raw_net_feats = sample_netlist.graph.nodes['net'].data['feat'].shape[1]
     raw_pin_feats = sample_netlist.graph.edges['pinned'].data['feat'].shape[1]
+    args.lr = 1e-6
+    args.epochs=10
+    args.name = "train_"+name
+    args.model = "pretrain_"+name
     placer = GNNPlace(raw_cell_feats, raw_net_feats, raw_pin_feats, config,args)
+    # placer.load_dict(f"./model/{args.model}.pkl",device)
+    # placer.load_dict(f"./model/pretrain_cellflow_kahypar_cellprop.pkl",device)
     # if args.model:
     #     placer.load_dict(f"./model/{args.model}.pkl",device)
     if os.path.exists(os.path.join(MODEL_DIR,f"{args.model}.pkl")):

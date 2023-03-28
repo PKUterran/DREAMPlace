@@ -30,7 +30,7 @@ import json
 def generate_data(netlist_dir:str,params,save_type=1,for_test=False):
     data_file_list = ['cell_pos.npy', 'cell_data.npy','net_data.npy','pin_data.npy','pin_net_cell.npy','cell_clusters.json','layout_size.json']
     if for_test:
-        data_file_list = ['cell_clusters.json','layout_size.json']
+        data_file_list = ['cell_clusters.json','layout_size.json','cell_pos.npy']
     flag = False
     for data_file_name in data_file_list:
         if not os.path.exists(osp.join(netlist_dir,data_file_name)) or save_type == 2:
@@ -80,7 +80,7 @@ def generate_data(netlist_dir:str,params,save_type=1,for_test=False):
                     for pin_id in net_pin_list:
                         parent_node_id = placedb.pin2node_map[pin_id]
                         pin_data[pin_id] = torch.tensor([placedb.pin_offset_x[pin_id],placedb.pin_offset_y[pin_id],int(placedb.pin_direct[pin_id] == b'OUTPUT')])
-                np.save(osp.join(netlist_dir,data_file_name),pin_data.squeeze().numpy())
+                np.save(osp.join(netlist_dir,data_file_name),pin_data.squeeze().numpy().astype(np.int))
             elif data_file_name == 'pin_net_cell.npy':#,'cell_clusters.json'
                 pin_net_cell = []
 

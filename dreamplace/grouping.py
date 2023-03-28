@@ -174,7 +174,8 @@ def create_group(
         cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyParFast -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/mt-kahypar/config/fast_preset.ini -t 24"
         grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed0.KaHyPar")
     elif use_kahypar == "mt_strong":
-        cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyParStrong -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/mt-kahypar/config/strong_preset.ini -t 24"
+        # cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyParStrong -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/mt-kahypar/config/strong_preset.ini -t 24"
+        cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyPar -h {hmetis_input_filename} --preset-type=default_flows  --instance-type=hypergraph -t 32 -k {blocks} -e 0.03 -o km1 -m direct --write-partition-file=true"
         grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed0.KaHyPar")
     print(cmd)
     os.system(cmd)

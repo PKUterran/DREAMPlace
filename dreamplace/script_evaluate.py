@@ -51,11 +51,23 @@ if __name__ == '__main__':
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
         # 'test/OurModel/mgc_fft_1/mgc_fft_1.json',
-        'test/OurModel/ispd19_test1/ispd19_test1.json',
-        # 'test/OurModel/mgc_superblue19/mgc_superblue19.json'
+        # 'test/OurModel/ispd19_test1/ispd19_test1.json',
+        # 'test/OurModel/mgc_superblue19/mgc_superblue19.json',
+        'test/OurModel/mgc_des_perf_1.json',
+        # 'test/OurModel/mgc_fft_1.json',
+        # 'test/OurModel/mgc_fft_2.json',
+        # 'test/OurModel/mgc_fft_a.json',
+        # 'test/OurModel/mgc_fft_b.json',
+        # 'test/OurModel/mgc_matrix_mult_1.json',
+        # 'test/OurModel/mgc_matrix_mult_2.json',
+        # 'test/OurModel/mgc_matrix_mult_a.json',
+        'test/OurModel/mgc_superblue12.json',
+        'test/OurModel/mgc_superblue14.json',
+        # 'test/OurModel/mgc_superblue19.json',
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
+        f'{NETLIST_DIR}/ispd2015/mgc_des_perf_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
@@ -63,8 +75,10 @@ if __name__ == '__main__':
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
+        f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
+        f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
-        f'{NETLIST_DIR}/ispd2019/ispd19_test1'
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test1'
     ]
     ############Train
     generate_data_list(test_netlist_names,test_param_json_list)
@@ -72,7 +86,7 @@ if __name__ == '__main__':
 
     os.environ["OMP_NUM_THREADS"] = "%d" % (16)
     args = parse_train_args()
-    jump_model_inference = False
+    jump_model_inference = True
     if not jump_model_inference:
         test_placedb_list = load_placedb(test_param_json_list,test_netlist_names,'test',2)
         device = torch.device(args.device)
@@ -98,9 +112,10 @@ if __name__ == '__main__':
         placer.logs = [{'epoch':0}]
         for placedb,netlist_name in zip(test_placedb_list,test_netlist_names):
             netlist_name = netlist_name.split('/')[-1]
-            metric_dict = placer.evaluate_place(placedb,placedb.netlist,netlist_name,use_tqdm=True)
+            metric_dict = placer.evaluate_place(placedb,placedb.netlist,netlist_name,detail_placement=True,use_tqdm=True)
             placer.logs[-1].update(metric_dict)
             result[netlist_name] = {"eval time":placer.logs[-1][f"{netlist_name} eval_time"]}
+            # result[netlist_name]['hpwl'] = metric_dict['hpwl']
     for netlist_dir,param_dir in zip(test_netlist_names,test_param_json_list):
         if not os.path.exists(param_dir):
             create_param_json(netlist_dir,param_dir)
@@ -116,5 +131,7 @@ if __name__ == '__main__':
         if netlist_name not in result:
             result[netlist_name] = {"hpwl":0,"eval time":0}
         result[netlist_name]["hpwl"] = metrics[-1].true_hpwl
+        result[netlist_name]["inference time"] = result[netlist_name]["eval time"]
+        result[netlist_name]["dreamplace time"] = metrics[-1].optimizer_time
         result[netlist_name]["eval time"] += metrics[-1].optimizer_time
     print(result)

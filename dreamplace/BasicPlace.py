@@ -293,9 +293,9 @@ class BasicPlace(nn.Module):
         self.random_center_init_flag = params.random_center_init_flag
         if hasattr(params,'init_pos_dir'):
             init_pos = np.load(params.init_pos_dir)#test-train-smoothl1#test-traincellflow
-            self.init_pos[0:placedb.num_physical_nodes] = init_pos[:,0]
+            self.init_pos[0:placedb.num_movable_nodes] = init_pos[:placedb.num_movable_nodes,0]
             self.init_pos[placedb.num_nodes:placedb.num_nodes + 
-                            placedb.num_physical_nodes] = init_pos[:,1]
+                            placedb.num_movable_nodes] = init_pos[:placedb.num_movable_nodes,1]
         #####################
 
         if placedb.num_filler_nodes:  # uniformly distribute filler cells in the layout
