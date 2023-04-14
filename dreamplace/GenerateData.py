@@ -63,7 +63,7 @@ def generate_data(netlist_dir:str,params,save_type=1,for_test=False):
                 os.system(f"cp -r {netlist_dir} ./build/benchmarks")
                 netlist_name = netlist_dir.split("/")[-1]
                 os.system(f"mkdir -p ./result/DREAMPlaceGP/{netlist_name}")
-                params.__dict__["save_gp_dir"] = f"./result/DREAMPlaceGP/{netlist_name}"
+                params.__dict__["save_gp_dir"] = f"./result/DREAMPlaceGP/{netlist_name}/{netlist_name}"
                 placer = NonLinearPlace.NonLinearPlace(params, placedb)
                 metrics = placer(params, placedb)
                 node_x,node_y = placedb.node_x,placedb.node_y

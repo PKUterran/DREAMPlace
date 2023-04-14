@@ -21,13 +21,14 @@ from typing import List
 import PlaceDB
 from dreamplace import NonLinearPlace
 import logging
+import pandas as pd
 
 LOG_DIR = 'log/pretrain'
 FIG_DIR = 'visualize/pretrain'
 MODEL_DIR = 'model'
 NETLIST_DIR='benchmarks'
 # PARAM_DIR='test/ispd2015/lefdef'
-PARAM_DIR='test/OurModel'
+PARAM_DIR='test/DREAMPlace_adam_long'
 
 def generate_param_list(netlist_dir_list:List[str],param_dir_list:List[str]):
     for netlist_dir,param_dir in zip(netlist_dir_list,param_dir_list):
@@ -52,7 +53,7 @@ if __name__ == '__main__':
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
         # 'test/DREAMPlace/ispd19_test1/ispd19_test1.json'
-        f'{PARAM_DIR}/mgc_des_perf_1.json',
+        # f'{PARAM_DIR}/mgc_des_perf_1.json',
         # f'{PARAM_DIR}/mgc_fft_1.json',
         # f'{PARAM_DIR}/mgc_fft_2.json',
         # f'{PARAM_DIR}/mgc_fft_a.json',
@@ -60,13 +61,22 @@ if __name__ == '__main__':
         # f'{PARAM_DIR}/mgc_matrix_mult_1.json',
         # f'{PARAM_DIR}/mgc_matrix_mult_2.json',
         # f'{PARAM_DIR}/mgc_matrix_mult_a.json',
-        # f'{PARAM_DIR}/mgc_superblue19.json',
-        f'{PARAM_DIR}/mgc_superblue12.json',
-        f'{PARAM_DIR}/mgc_superblue14.json',
+        # f'{PARAM_DIR}/mgc_superblue12.json',
+        # f'{PARAM_DIR}/mgc_superblue14.json',
+        f'{PARAM_DIR}/mgc_superblue19.json',
+        # f'{PARAM_DIR}/ispd19_test1.json',
+        # f'{PARAM_DIR}/ispd19_test2.json',
+        # f'{PARAM_DIR}/ispd19_test3.json',
+        # f'{PARAM_DIR}/ispd19_test4.json',
+        # f'{PARAM_DIR}/ispd19_test6.json',
+        # f'{PARAM_DIR}/ispd19_test7.json',
+        # f'{PARAM_DIR}/ispd19_test8.json',
+        # f'{PARAM_DIR}/ispd19_test9.json',
+        # f'{PARAM_DIR}/ispd19_test10.json',
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
-        f'{NETLIST_DIR}/ispd2015/mgc_des_perf_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_des_perf_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
@@ -74,10 +84,18 @@ if __name__ == '__main__':
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
-        # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test1'
-        f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
-        f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
+        f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test1',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test2',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test3',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test4',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test6',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test7',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test8',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test9',
+        # f'{NETLIST_DIR}/ispd2019/ispd19_test10',
     ]
     ############Train
     generate_param_list(test_netlist_names,test_param_json_list)
@@ -91,11 +109,26 @@ if __name__ == '__main__':
         placedb = PlaceDB.PlaceDB()
         placedb(params)
         netlist_name = netlist_name.split('/')[-1]
-        os.system(f"mkdir -p ./result/DREAMPlace/{netlist_name}")
-        params.__dict__["save_gp_dir"] = f"./result/DREAMPlace/{netlist_name}/DREAMPlace_adam{netlist_name}"
+        os.system(f"mkdir -p ./result/DREAMPlace_adam/{netlist_name}")
+        params.__dict__["save_gp_dir"] = f"./result/DREAMPlace_adam/{netlist_name}/DREAMPlace_adam{netlist_name}"
+        assert not hasattr(params,'init_pos_dir')
         placer = NonLinearPlace.NonLinearPlace(params, placedb)
         metrics = placer(params, placedb)
         result[netlist_name] ={}
         result[netlist_name]["hpwl"] = metrics[-1].true_hpwl
         result[netlist_name]["eval time"] = metrics[-1].optimizer_time
+        result[netlist_name]["epochs"] = len(metrics)
     print(result)
+    # keys = list(result.keys())
+    # result_name_list = list(result[keys[0]].keys())
+    # df = pd.DataFrame()
+    # df['netlist'] = keys
+    # for result_name in result_name_list:
+    #     tmp_result = []
+    #     for key in keys:
+    #         if not result_name in result[key]:
+    #             tmp_result.append(-1)
+    #         else:
+    #             tmp_result.append(float(result[key][result_name]))
+    #     df[result_name] = tmp_result
+    # df.to_excel(f"./result/DREAMPlace_adam/result_ispd2019_new.xlsx",index=False)

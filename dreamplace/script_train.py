@@ -35,71 +35,89 @@ def generate_data_list(netlist_dir_list:List[str],param_dir_list:List[str],save_
 if __name__ == '__main__':
     train_param_json_list = [
         # 'test/dac2012/superblue2.json'
-        'test/ispd2015/lefdef/mgc_fft_1.json',
-        'test/ispd2015/lefdef/mgc_fft_2.json',
-        'test/ispd2015/lefdef/mgc_fft_a.json',
-        'test/ispd2015/lefdef/mgc_fft_b.json',
+        # 'test/ispd2015/lefdef/mgc_fft_1.json',
+        # 'test/ispd2015/lefdef/mgc_fft_2.json',
+        # 'test/ispd2015/lefdef/mgc_fft_a.json',
+        # 'test/ispd2015/lefdef/mgc_fft_b.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_1.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
+        'test/ispd2019/lefdef/ispd19_test1.json',
+        'test/ispd2019/lefdef/ispd19_test2.json',
+        'test/ispd2019/lefdef/ispd19_test3.json',
     ]
     train_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test1',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test2',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test3',
     ]
     valid_param_json_list = [
         # 'test/dac2012/superblue2.json'
-        'test/ispd2015/lefdef/mgc_fft_1.json',
-        'test/ispd2015/lefdef/mgc_fft_2.json',
-        'test/ispd2015/lefdef/mgc_fft_a.json',
-        'test/ispd2015/lefdef/mgc_fft_b.json',
+        # 'test/ispd2015/lefdef/mgc_fft_1.json',
+        # 'test/ispd2015/lefdef/mgc_fft_2.json',
+        # 'test/ispd2015/lefdef/mgc_fft_a.json',
+        # 'test/ispd2015/lefdef/mgc_fft_b.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_1.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue14.json',
+        'test/ispd2019/lefdef/ispd19_test1.json',
+        'test/ispd2019/lefdef/ispd19_test2.json',
+        'test/ispd2019/lefdef/ispd19_test3.json',
     ]
     valid_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test1',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test2',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test3',
     ]
     test_param_json_list = [
         # 'test/dac2012/superblue2.json'
-        'test/ispd2015/lefdef/mgc_fft_1.json',
-        'test/ispd2015/lefdef/mgc_fft_2.json',
-        'test/ispd2015/lefdef/mgc_fft_a.json',
-        'test/ispd2015/lefdef/mgc_fft_b.json',
+        # 'test/ispd2015/lefdef/mgc_fft_1.json',
+        # 'test/ispd2015/lefdef/mgc_fft_2.json',
+        # 'test/ispd2015/lefdef/mgc_fft_a.json',
+        # 'test/ispd2015/lefdef/mgc_fft_b.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_1.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_2.json',
         # 'test/ispd2015/lefdef/mgc_matrix_mult_a.json',
         # 'test/ispd2015/lefdef/mgc_superblue19.json',
         # 'test/ispd2015/lefdef/mgc_superblue12.json',
+        'test/ispd2019/lefdef/ispd19_test1.json',
+        'test/ispd2019/lefdef/ispd19_test2.json',
+        'test/ispd2019/lefdef/ispd19_test3.json',
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
         # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
         # f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test1',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test2',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test3',
     ]
     generate_data_list(train_netlist_names,train_param_json_list,1)
     generate_data_list(valid_netlist_names,valid_param_json_list,1)
@@ -136,6 +154,7 @@ if __name__ == '__main__':
         'NET_FEATS': args.net_feats,
         'PIN_FEATS': args.pin_feats,
         'PASS_TYPE': args.pass_type,
+        'NUM_LAYERS':args.layers,
     }
     sample_netlist = train_placedb_list[0].netlist
     raw_cell_feats = sample_netlist.graph.nodes['cell'].data['feat'].shape[1]

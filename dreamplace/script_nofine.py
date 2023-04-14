@@ -48,7 +48,7 @@ def add_netlist_name2time_json_file(file_name:str,netlist_name:str):
 
 def generate_data_list(netlist_dir_list:List[str],param_dir_list:List[str]):
     # create_time_json_file("cellflow_time.json")
-    create_time_json_file("grouping_time.json")
+    # create_time_json_file("grouping_time.json")
     # create_time_json_file("overlap_ratio.json")
 
     
@@ -56,7 +56,7 @@ def generate_data_list(netlist_dir_list:List[str],param_dir_list:List[str]):
 
         netlist_name = netlist_dir.split("/")[-1]
         # add_netlist_name2time_json_file("cellflow_time.json",netlist_name)
-        add_netlist_name2time_json_file("grouping_time.json",netlist_name)
+        # add_netlist_name2time_json_file("grouping_time.json",netlist_name)
         # add_netlist_name2time_json_file("overlap_ratio.json",netlist_name)
         
         if not os.path.exists(param_dir):
@@ -83,49 +83,56 @@ if __name__ == '__main__':
         # f'{PARAM_DIR}/mgc_fft_1/mgc_fft_1.json',
         # f'{PARAM_DIR}/ispd19_test1/ispd19_test1.json',
         # f'{PARAM_DIR}/mgc_superblue19/mgc_superblue19.json',
-        f'{PARAM_DIR}/mgc_des_perf_1.json',
-        f'{PARAM_DIR}/mgc_fft_1.json',
-        f'{PARAM_DIR}/mgc_fft_2.json',
-        f'{PARAM_DIR}/mgc_fft_a.json',
-        f'{PARAM_DIR}/mgc_fft_b.json',
-        f'{PARAM_DIR}/mgc_matrix_mult_1.json',
-        f'{PARAM_DIR}/mgc_matrix_mult_2.json',
-        f'{PARAM_DIR}/mgc_matrix_mult_a.json',
-        f'{PARAM_DIR}/mgc_superblue12.json',
-        f'{PARAM_DIR}/mgc_superblue14.json',
-        f'{PARAM_DIR}/mgc_superblue19.json',
-        # f'{PARAM_DIR}/ispd19_test1.json',
-        # f'{PARAM_DIR}/ispd19_test2.json',
-        # f'{PARAM_DIR}/ispd19_test3.json',
-        # f'{PARAM_DIR}/ispd19_test4.json',
-        # f'{PARAM_DIR}/ispd19_test6.json',
-        # f'{PARAM_DIR}/ispd19_test7.json',
-        # f'{PARAM_DIR}/ispd19_test8.json',
-        # f'{PARAM_DIR}/ispd19_test9.json',
-        # f'{PARAM_DIR}/ispd19_test10.json',
+        # f'{PARAM_DIR}/mgc_des_perf_1.json',
+        # f'{PARAM_DIR}/mgc_fft_1.json',
+        # f'{PARAM_DIR}/mgc_fft_2.json',
+        # f'{PARAM_DIR}/mgc_fft_a.json',
+        # f'{PARAM_DIR}/mgc_fft_b.json',
+        # f'{PARAM_DIR}/mgc_matrix_mult_1.json',
+        # f'{PARAM_DIR}/mgc_matrix_mult_2.json',
+        # f'{PARAM_DIR}/mgc_matrix_mult_a.json',
+        # f'{PARAM_DIR}/mgc_superblue12.json',
+        # f'{PARAM_DIR}/mgc_superblue14.json',
+        # f'{PARAM_DIR}/mgc_superblue19.json',
+        # 'test/OurModel_lowepoch/mgc_fft_1.json',
+        # 'test/OurModel_lowepoch/mgc_fft_2.json',
+        # 'test/OurModel_lowepoch/mgc_fft_a.json',
+        # 'test/OurModel_lowepoch/mgc_fft_b.json',
+        # 'test/OurModel_lowepoch/mgc_fft_b.json',
+        # 'test/OurModel_lowepoch/mgc_fft_b.json',
+        # 'test/OurModel_lowepoch/mgc_fft_b.json',
+        f'{PARAM_DIR}/ispd19_test1.json',
+        f'{PARAM_DIR}/ispd19_test2.json',
+        f'{PARAM_DIR}/ispd19_test3.json',
+        # # f'{PARAM_DIR}/ispd19_test4.json',
+        f'{PARAM_DIR}/ispd19_test6.json',
+        f'{PARAM_DIR}/ispd19_test7.json',
+        f'{PARAM_DIR}/ispd19_test8.json',
+        f'{PARAM_DIR}/ispd19_test9.json',
+        f'{PARAM_DIR}/ispd19_test10.json',
     ]
     test_netlist_names = [
         # f'{NETLIST_DIR}/dac2012/superblue2'
-        f'{NETLIST_DIR}/ispd2015/mgc_des_perf_1',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
-        f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
-        f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
-        f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
-        f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
-        f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
-        f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
-        f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test1',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test2',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test3',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test4',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test6',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test7',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test8',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test9',
-        # f'{NETLIST_DIR}/ispd2019/ispd19_test10',
+        # f'{NETLIST_DIR}/ispd2015/mgc_des_perf_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_2',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_a',
+        # f'{NETLIST_DIR}/ispd2015/mgc_fft_b',
+        # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_1',
+        # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_2',
+        # f'{NETLIST_DIR}/ispd2015/mgc_matrix_mult_a',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue12',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue14',
+        # f'{NETLIST_DIR}/ispd2015/mgc_superblue19',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test1',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test2',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test3',
+        # # f'{NETLIST_DIR}/ispd2019/ispd19_test4',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test6',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test7',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test8',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test9',
+        f'{NETLIST_DIR}/ispd2019/ispd19_test10',
     ]
     ############Train
     generate_data_list(test_netlist_names,test_param_json_list)
@@ -152,56 +159,37 @@ if __name__ == '__main__':
         placer = GNNPlace(raw_cell_feats, raw_net_feats, raw_pin_feats, config,args)
         if args.model:
             placer.load_dict(f"./model/{args.model}.pkl",device)
-        placer.jump_LGDP = True
         placer.logs.append({'epoch':0})
         # for placedb,netlist_name in zip(test_placedb_list,test_netlist_names):
         #     netlist_name = netlist_name.split('/')[-1]
         #     _ = placer.evaluate_place(placedb,placedb.netlist,netlist_name,use_tqdm=False)
         # placer.logs = [{'epoch':0}]
-        for placedb,netlist_name in zip(test_placedb_list,test_netlist_names):
+        for placedb,netlist_name,param_dir in zip(test_placedb_list,test_netlist_names,test_param_json_list):
             netlist_name = netlist_name.split('/')[-1]
-            metric_dict = placer.evaluate_place(placedb,placedb.netlist,netlist_name,detail_placement=True,use_tqdm=True)
-            placer.logs[-1].update(metric_dict)
-            result[netlist_name] = {"eval time":placer.logs[-1][f"{netlist_name} eval_time"]}
-            # result[netlist_name]['hpwl'] = metric_dict['hpwl']
-    if not jump_dreamplace:
-        for netlist_dir,param_dir in zip(test_netlist_names,test_param_json_list):
-            if not os.path.exists(param_dir):
-                create_param_json(netlist_dir,param_dir)
             params = Params.Params()
             params.load(param_dir)
-            placedb = PlaceDB.PlaceDB()
-            placedb(params)
-            netlist_name = netlist_dir.split('/')[-1]
-            params.__dict__["init_pos_dir"] = f'./result/{args.name}/{netlist_name}/{netlist_name}.npy'
-            params.__dict__["save_gp_dir"] = f"./result/{args.name}/{netlist_name}/{netlist_name}"
-            # params.__dict__["RePlAce_UPPER_PCOF"] = 1.07
-            placer = NonLinearPlace.NonLinearPlace(params, placedb)
-            metrics = placer(params, placedb)
-            if netlist_name not in result:
-                result[netlist_name] = {"hpwl":0,"eval time":0}
-            result[netlist_name]["hpwl"] = metrics[-1].true_hpwl
-            result[netlist_name]["inference time"] = result[netlist_name]["eval time"]
-            result[netlist_name]["dreamplace time"] = metrics[-1].optimizer_time
-            result[netlist_name]["eval time"] += metrics[-1].optimizer_time
-            result[netlist_name]["epochs"] = len(metrics)
-    print(result)
-        # with open(f"./result/{args.name}/result.json","w") as f:
-        #     for k,v in result.items():
-        #         for k_,v_ in v.items():
-        #             v[k_] = float(v_)
-        #         result[k] = v
-        #     f.write(json.dumps(result))
-        #     keys = list(result.keys())
-        #     result_name_list = list(result[keys[0]].keys())
-        #     df = pd.DataFrame()
-        #     df['netlist'] = keys
-        #     for result_name in result_name_list:
-        #         tmp_result = []
-        #         for key in keys:
-        #             if not result_name in result[key]:
-        #                 tmp_result.append(-1)
-        #             else:
-        #                 tmp_result.append(float(result[key][result_name]))
-        #         df[result_name] = tmp_result
-        #     df.to_excel(f"./result/{args.name}/result.xlsx",index=False)
+            __placedb = PlaceDB.PlaceDB()
+            __placedb(params)
+            metric_dict = placer.evaluate_place(placedb,placedb.netlist,netlist_name,detail_placement=True,use_tqdm=True)
+            placer.logs[-1].update(metric_dict)
+            result[netlist_name] = {"eval time":placer.logs[-1][f"{netlist_name} eval_time"],"hpwl":placer.logs[-1]["hpwl"] / params.scale_factor}
+        print(result)
+        with open(f"./result/{args.name}/result.json","w") as f:
+            for k,v in result.items():
+                for k_,v_ in v.items():
+                    v[k_] = float(v_)
+                result[k] = v
+            f.write(json.dumps(result))
+            keys = list(result.keys())
+            result_name_list = list(result[keys[0]].keys())
+            df = pd.DataFrame()
+            df['netlist'] = keys
+            for result_name in result_name_list:
+                tmp_result = []
+                for key in keys:
+                    if not result_name in result[key]:
+                        tmp_result.append(-1)
+                    else:
+                        tmp_result.append(float(result[key][result_name]))
+                df[result_name] = tmp_result
+            df.to_excel(f"./result/{args.name}/result.xlsx",index=False)

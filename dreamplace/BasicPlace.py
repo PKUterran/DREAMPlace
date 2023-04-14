@@ -656,6 +656,7 @@ class BasicPlace(nn.Module):
             if not legal:
                 logging.error("legality check failed in greedy legalization")
                 return pos2
+            # return pos2
             return al(pos1, pos2)
 
         return build_legalization_op

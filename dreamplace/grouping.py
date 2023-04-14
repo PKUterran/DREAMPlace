@@ -10,6 +10,7 @@ import Params
 import math
 import json
 import numpy as np
+from time import time
 
 def create_input_graph_file(
     graph:dgl.DGLHeteroGraph,
@@ -45,6 +46,39 @@ def create_input_graph_file(
     with open(input_file_name,'w') as f:
         f.write("".join(output_str))
 
+def overlap(func):
+    def fn2(graph,belong,blocks):
+        result = func(graph,belong,blocks)
+        if not os.path.exists("/root/DREAMPlace/time/overlap_ratio.json"):
+            return result
+        
+        num_nets = graph.num_nodes('net')
+        num_nodes = graph.num_nodes('cell')
+        overlap_ratio = 0.0
+
+        for i,group_edges in enumerate(result):
+            group_graph = nx.Graph(list(group_edges))
+            connect_part_set_list = nx.connected_components(group_graph)
+            connect_part_lists = [list(node_set) for node_set in connect_part_set_list]
+            for connect_part in connect_part_lists:
+                tmp_cnt = 0
+                for cell in connect_part:
+                    if cell > num_nodes:
+                        tmp_cnt += 1
+                        continue
+                overlap_ratio += tmp_cnt * 1.0 / num_nets
+
+        with open("/root/DREAMPlace/time/overlap_ratio.json","r") as f:
+            data = json.load(f)
+        for k,v in data.items():
+            if v == -1:
+                data[k] = overlap_ratio
+                with open("/root/DREAMPlace/time/overlap_ratio.json","w") as f:
+                    f.write(json.dumps(data))
+                break
+        return result
+    return fn2
+@overlap
 def create_group_graph(
     graph:dgl.DGLHeteroGraph,
     belong,
@@ -149,8 +183,24 @@ def check_cluster_json(
     
     
     
-
-
+def timer(func):
+    def fn2(*args,**kwargs):
+        f=time()
+        result = func(*args,**kwargs)
+        d = time()
+        c = d-f
+        if os.path.exists("/root/DREAMPlace/time/grouping_time.json"):
+            with open("/root/DREAMPlace/time/grouping_time.json","r") as f:
+                data = json.load(f)
+            for k,v in data.items():
+                if v == -1:
+                    data[k] = result
+                    with open("/root/DREAMPlace/time/grouping_time.json","w") as f:
+                        f.write(json.dumps(data))
+                    break
+        return result
+    return fn2
+@timer
 def create_group(
     graph:dgl.DGLHeteroGraph,
     output_dir: str,
@@ -166,7 +216,7 @@ def create_group(
         return
     hmetis_input_filename = os.path.join(output_dir,'graph.input')
     create_input_graph_file(graph,hmetis_input_filename,cell_prop_dict)
-    use_kahypar = "kahypar"
+    use_kahypar = "mt_strong"
     if use_kahypar == "kahypar":
         cmd = f"./thirdparty/kahypar/build/kahypar/application/KaHyPar -h {hmetis_input_filename} -k {blocks} -e 0.03 -o km1 -m direct -p ./thirdparty/kahypar/config/km1_kKaHyPar_sea20.ini -w true"
         grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed-1.KaHyPar")
@@ -178,13 +228,16 @@ def create_group(
         cmd = f"./thirdparty/mt-kahypar/build/mt-kahypar/application/MtKaHyPar -h {hmetis_input_filename} --preset-type=default_flows  --instance-type=hypergraph -t 32 -k {blocks} -e 0.03 -o km1 -m direct --write-partition-file=true"
         grouping_filename = os.path.join(output_dir,f"graph.input.part{blocks}.epsilon0.03.seed0.KaHyPar")
     print(cmd)
+    a=time()
     os.system(cmd)
+    b=time()
     cluster_json_filename = os.path.join(output_dir,"cell_clusters.json")
     theta = 1e9#(cell_prop_dict['size'][:,0] * cell_prop_dict['size'][:,1]).mean()#200
     create_cluster_json(graph,grouping_filename,cluster_json_filename,blocks,theta,cell_prop_dict)
     if not keep_cluster_file:
         os.remove(grouping_filename)
         os.remove(hmetis_input_filename)
+    return b-a
 
 if __name__ == '__main__':
     param_json = '/home/xuyanyang/RL/DREAMPlace/test/ispd2015/lefdef/mgc_superblue19.json'

@@ -280,11 +280,13 @@ class PlaceObj(nn.Module):
         self.node_y = placedb.node_y
         self.anchor_weight = 1e-2
         self.params = params
-        self.loss_mask = torch.zeros(self.num_nodes * 2)
+        self.loss_mask = torch.zeros(self.num_nodes * 2).to(self.data_collections.pos[0].device)
         self.num_movable_nodes = placedb.num_movable_nodes
         self.loss_mask[:self.num_movable_nodes] = 1
         self.loss_mask[self.num_nodes:self.num_nodes + 
                         self.num_movable_nodes] = 1
+        self.anchor = torch.tensor([self.placedb.xh,self.placedb.yh],device=self.data_collections.pos[0].device)*0.05 * torch.ones([self.num_nodes,2],device=self.data_collections.pos[0].device)
+        self.anchor = self.anchor.view(-1)
         ############ add anchor loss
 
 ############ add anchor loss
@@ -335,17 +337,15 @@ class PlaceObj(nn.Module):
             result = torch.add(self.wirelength, self.density, alpha=(self.density_factor * self.density_weight).item())
         ############ add anchor loss
         if hasattr(self.params,'init_pos_dir'):
-            anchor = torch.tensor([self.placedb.xh,self.placedb.yh],device=pos.device)*0.05 * torch.ones([self.num_nodes,2],device=pos.device)
-            anchor = anchor.view(-1)
-            delta = torch.nn.functional.leaky_relu(torch.abs(pos - self.anchor_pos.to(pos.device)) - anchor,negative_slope=0.01)
+            delta = torch.nn.functional.leaky_relu(torch.abs(pos - self.anchor_pos) - self.anchor,negative_slope=0.01)
             # self.anchor_weight = float(self.density_factor * self.density_weight)
             # anchor_loss = torch.nn.functional.l1_loss(torch.ones_like(delta,device=pos.device)*-1e4,delta,reduction='sum')
-            anchor_loss = torch.sum(delta * self.loss_mask.to(self.data_collections.pos[0].device))
+            anchor_loss = torch.sum(delta * self.loss_mask)
             result = torch.add(result,anchor_loss,alpha = self.anchor_weight)
             self.anchor_weight*=0.98
-            logging.info(f"anchor loss {(anchor_loss * self.anchor_weight).data}")
-            logging.info(f"wirelength loss {self.wirelength.data}")
-            logging.info(f"density loss {(self.density * self.density_factor * self.density_weight).data}")
+            # logging.info(f"anchor loss {(anchor_loss * self.anchor_weight).data}")
+            # logging.info(f"wirelength loss {self.wirelength.data}")
+            # logging.info(f"density loss {(self.density * self.density_factor * self.density_weight).data}")
         ############ add anchor loss
 
         return result

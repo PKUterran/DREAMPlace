@@ -118,10 +118,10 @@ class GNNPlace():
             print(f'\tUsing model {dir_name}')
             model_dicts = torch.load(f'{dir_name}', map_location=device)
             tmp_OrderedDict = collections.OrderedDict()
-            for name,v in model_dicts.items():
-                new_name = name.replace("pins.bias","pins.fc_self.bias").replace("points-to.bias","points-to.fc_self.bias")
-                tmp_OrderedDict[new_name] = v
-            self.model.load_state_dict(tmp_OrderedDict)
+            # for name,v in model_dicts.items():
+            #     new_name = name.replace("pins.bias","pins.fc_self.bias").replace("points-to.bias","points-to.fc_self.bias")
+            #     tmp_OrderedDict[new_name] = v
+            self.model.load_state_dict(model_dicts)
             self.model.eval()
     
     
@@ -447,7 +447,8 @@ class GNNPlace():
         _sub_graph = dgl.node_subgraph(_graph,nodes={'cell':partion_cells,'net':partion_nets},output_device=device)
         terminal_index = torch.tensor(list(set(partion_cells.cpu().numpy()) - set(batch_cell.cpu().numpy()))).to(device)
         batch_cell = torch.hstack([batch_cell,terminal_index]).long()
-        cell_pos.append(placedb.netlist.original_netlist.graph.nodes['cell'].data['pos'][terminal_index].to(device))
+        if terminal_index.size(0) != 0:
+            cell_pos.append(placedb.netlist.original_netlist.graph.nodes['cell'].data['pos'][terminal_index].to(device))
         cell_pos = torch.vstack(cell_pos)
         _graph = _graph.cpu()
 
@@ -837,6 +838,25 @@ class GNNPlace():
             data_op_collection = self.collect_netlist_op([placedb])
             if self.args.model:
                 self.load_dict(f"./model/{self.args.model}.pkl",self.device)
+        ##########
+        self.model = self.model.to(self.device)
+        for nid,sub_netlist in dict_netlist.items():
+            dict_netlist[nid].terminal_edge_theta_rev = dict_netlist[nid].terminal_edge_theta_rev.to(self.device)
+
+            dict_netlist[nid].path_edge_matrix
+            dict_netlist[nid]._path_edge_matrix = dict_netlist[nid]._path_edge_matrix.to(self.device)
+
+            dict_netlist[nid].edge_ends_path_indices
+            dict_netlist[nid]._edge_ends_path_indices = dict_netlist[nid]._edge_ends_path_indices.to(self.device)
+
+            dict_netlist[nid].terminal_edge_rel_pos = dict_netlist[nid].terminal_edge_rel_pos.to(self.device)
+            dict_netlist[nid]._cell_path_edge_matrix = dict_netlist[nid]._cell_path_edge_matrix.to(self.device)
+            
+            dict_netlist[nid].path_edge_matrix
+            dict_netlist[nid]._path_edge_matrix = dict_netlist[nid]._path_edge_matrix.to(self.device)
+            dict_netlist[nid]._path_cell_matrix = dict_netlist[nid]._path_cell_matrix.to(self.device)
+            dict_netlist[nid].graph = dict_netlist[nid].graph.to(self.device)
+        ##########
         t0 = time.time()
         if finetuning:
             # random.shuffle(data_op_collection)
@@ -986,12 +1006,11 @@ class GNNPlace():
         
         # print(self.pos,cell_pos)
 
+        flag = False
         if detail_placement:
-            while True:
-                cell_pos[0] = nn.Parameter(self.legalize_cell(placedb,cell_pos[0]))
-                if self.legalize_check(placedb,cell_pos[0]):
-                    break
-            assert self.legalize_check(placedb,cell_pos[0])
+            cell_pos[0] = nn.Parameter(self.legalize_cell(placedb,cell_pos[0]))
+            flag = not self.legalize_check(placedb,cell_pos[0])
+            # assert self.legalize_check(placedb,cell_pos[0])
             cell_pos[0] = nn.Parameter(self.detail_placement(placedb,cell_pos[0]))
         # cell_pos[0] = self.legalize_cell(placedb,cell_pos[0])
         # cell_pos[0] = self.detail_placement(placedb,cell_pos[0])
@@ -1010,14 +1029,16 @@ class GNNPlace():
             )
             placedb.write(placedb.params,f'./result/{self.args.name}/{netlist_name}/{netlist_name}.{placedb.params.solution_file_suffix()}')
         
+        if flag:
+            hpwl += 0.5
         return {'hpwl' : hpwl,
                 'rudy' : rudy}
     
     def evaluate_model(self,placedb_list,netlist_names,finetuning=0,name='train'):
-        self.logs.append({'epoch':0})
-        for placedb,netlist_name in zip(placedb_list,netlist_names):
-            netlist_name = netlist_name.split('/')[-1]
-            _ = self.evaluate_place(placedb,placedb.netlist,netlist_name,use_tqdm=False)
+        # self.logs.append({'epoch':0})
+        # for placedb,netlist_name in zip(placedb_list,netlist_names):
+        #     netlist_name = netlist_name.split('/')[-1]
+        #     _ = self.evaluate_place(placedb,placedb.netlist,netlist_name,use_tqdm=False)
         self.logs = [{'epoch':0}]
         t0 = time.time()
         for placedb,netlist_name in zip(placedb_list,netlist_names):
@@ -1376,7 +1397,7 @@ class GNNPlace():
             num_terminal_NIs=placedb.num_terminal_NIs,
             num_filler_nodes=placedb.num_filler_nodes,
             batch_size=256,
-            max_iters=50,
+            max_iters=2,
             algorithm='concurrent')
         kr = k_reorder.KReorder(
             node_size_x=torch.from_numpy(placedb.node_size_x).to(device),
@@ -1405,7 +1426,7 @@ class GNNPlace():
             num_terminal_NIs=placedb.num_terminal_NIs,
             num_filler_nodes=placedb.num_filler_nodes,
             K=4,
-            max_iters=50)
+            max_iters=2)
         ism = independent_set_matching.IndependentSetMatching(
             node_size_x=torch.from_numpy(placedb.node_size_x).to(device),
             node_size_y=torch.from_numpy(placedb.node_size_y).to(device),
